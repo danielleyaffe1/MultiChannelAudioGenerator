@@ -1,67 +1,76 @@
-
-from moviepy.editor import VideoFileClip
-import soundfile as sf
-import pygame as pg
-pg.init()
-pg.display.set_caption('MoviePy')
-import os
 from tools import *
-from room_generator import *
+from EDA import *
+from roomaudiodatabase import MultiChannelGenerator
+import json
+import random
+from tqdm import tqdm
+import numpy as np
+import math
 
+AV_DATA_FOLDER = 'cleandata'
+A_DATA_FOLDER = 'cleanaudiodata'
 
 
 if __name__ == "__main__":
-    # Load the video file
-    video_path = "cleandata/s1/bbaf2n.mpg"
-    video = VideoFileClip("cleandata/s1/bbaf2n.mpg")
+    # extract audio only files from .mpg files
+    # extract_audio(AV_DATA_FOLDER, A_DATA_FOLDER)
+    # print(f"Done extracting audio from mpg files in {AV_DATA_FOLDER}. Saved in {A_DATA_FOLDER}")
 
-    # Extract audio
-    audio = video.audio
-    sample_rate = audio.fps
-    #audio.preview(fps=sample_rate)
-    print(f"Audio duration: {audio.duration}, Sampling Rate: {sample_rate}")
+    # Define dataset parameters
+    room_sizes = [[7.0, 8.0, 3.0], [10.0, 8.0, 3.0], [12.0, 9.0, 3.0]]
+    rt60_values = [0.2]#[0.3, 0.5, 0.7, 0.8]  # Different reverberation times
+    snr_values = [5, 10] #[-15, -10, -5, 0, 5]    #Different SNR levels
+    num_interfering_sources = 1
+    num_settings = len(room_sizes) * len(rt60_values) * len(snr_values)
 
-    # TODO: for now save .wav file and then work with it. having problems with getting the np.array audio with AudioFileClip
-    #sndarray, fps = extract_audio(clip=audio, fps=sample_rate)
-    audio_path = video_path.replace("cleandata", "cleanaudiodata")
-    audio_path = audio_path.replace(".mpg", ".wav")
-    if not os.path.exists(audio_path):
-        audio.write_audiofile(audio_path, fps=sample_rate, codec="pcm_s16le")
+    num_pairs_per_spk = 100
 
-    audio, sample_rate = librosa.load(audio_path, mono=True)
+    output_dir = "NoReverv_1Inter"  # FIXME: "dataset_multichannel_audio"
+    clean_output_dir = output_dir + "_clean"    # FIXME: "dataset_multichannel_audio_clean"
+    save = True
+    verbose = False
 
-    # TODO: would want to vary acros a few values of room_dim, rt60_tgt, source_position: azimuth=[60,120]
-    # source location
+    # Create dataset
+    speaker_pairs = generate_speaker_pairs(datapath=A_DATA_FOLDER, num_samples=num_pairs_per_spk, num_interferers=num_interfering_sources)
+    dataset_generator = MultiChannelGenerator(sample_rate=16000, output_dir=output_dir, clean_output_dir=clean_output_dir, verbose=verbose, save_audio=save)
 
-    r_src, ph_src, th_src = 1.0, 90, 0  #source radios (m), azimuth(degree), altitude(degree)
-    relative_source_position = [r_src, ph_src, th_src]
-    mic_signals = room_generator(audio,
-                   sample_rate,
-                   room_dim=[6.0, 5.0, 3.0], #[length, width, height],
-                   rt60_tgt=0.4,  # desired reverberation time [seconds]
-                   relative_source_position=relative_source_position,
-                   with_prev=False)
+    # num_samples_per_setting = math.ceil(len(speaker_pairs)/num_settings)
+    #
+    # if num_samples_per_setting*num_settings > len(speaker_pairs):
+    #     raise ValueError('Need to generate more pairs per speaker using generate_speaker_pairs function (select higher value for "num_samples")')
 
-    #signal_at_microphones(mic_signals, sample_rate)
-    #signal_at_microphones(np.expand_dims(audio,axis=0), sample_rate)
-    # Assuming `mic_signals` is the output of room_generator (shape: num_mics x num_samples)
-    mic_energies = np.sum(mic_signals ** 2, axis=1)
+    indexes = list(range(len(speaker_pairs)))
+    random.shuffle(indexes)
 
-    # Print the energy of each mic
-    for i, energy in enumerate(mic_energies):
-        print(f"Microphone {i + 1} Energy: {energy:.2f}")
+    idx = 0
+    metadata = []
+    with tqdm(total=len(speaker_pairs), desc="Generating dataset", unit="sample") as pbar:
+        while idx < len(speaker_pairs):
+            snr, room_dim, rt60_tgt = random.choice(snr_values), random.choice(room_sizes), random.choice(rt60_values)
 
-    # Play original signal
-    # print("Playing original signal:")
-    # play_audio(audio, sample_rate)
+            audio_files = speaker_pairs[indexes[idx]]
+            sample_meta_data = dataset_generator.generate_multichannel_audio(room_dim, rt60_tgt, snr,
+                                                                             audio_files,
+                                                                             num_interfering_sources)
+            if save:
+                with open(f"{output_dir}.json", "a") as f:
+                    json.dump(sample_meta_data, f)  # Dump each dictionary separately
+                    f.write("\n")  # Add a newline after each JSON object
+            if verbose:
+                print(sample_meta_data)
+            metadata.append(sample_meta_data)
+            pbar.update(1)
+            idx += 1
 
-    # Play simulated signals from each microphone
-    # for i, mic_signal in enumerate(mic_signals):
-    #     print(f"Playing signal from Microphone {i + 1}:")
-    #     play_audio(mic_signal, sample_rate)
-        # output_path = f"/Users/danielleyaffe/Desktop/audio_simulations/Glasses array - pyroomacoustics/bbaf2n_mic_{i + 1}.wav"
-        # sf.write(output_path, mic_signal, sample_rate)
-        # print(f"Microphone {i + 1} signal saved to {output_path}")
+    print(f"Dataset generation complete! {idx} samples processed. Save status: {save}.")
+
+    # EDA
+    if save:
+        main(f"{output_dir}.json",f"{output_dir}_plots")
+
+
+
+
 
 
 

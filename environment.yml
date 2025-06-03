@@ -1,0 +1,14 @@
+name: datagenenv
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip
+  - numpy
+  - scipy
+  - matplotlib
+  - pandas
+  - scikit-learn
+  - seaborn
+  - pip:
+      - -r requirements.txt

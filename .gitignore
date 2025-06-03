@@ -1,0 +1,14 @@
+# Ignore all data folders
+.venv/
+venv/
+env/
+__pycache__/
+cleanaudiodata/
+cleandata/
+NoReverv_1Inter/
+NoReverv_1Inter_clean/
+NoReverv_1Inter_plots/
+NoReverv_1Inter.json
+*.db
+.DS_Store
+.idea/
