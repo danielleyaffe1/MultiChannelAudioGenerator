@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 
 
 class MultiChannelGenerator:
-    def __init__(self, sample_rate=16000, output_dir=None, clean_output_dir=None, verbose=False, save_audio=True):
+    def __init__(self, sample_rate=16000, output_dir=None, clean_output_dir=None, simulation='room', verbose=False, save_audio=True):
         self.sample_rate = sample_rate
         self.output_dir = output_dir
         if self.output_dir:
@@ -27,27 +27,31 @@ class MultiChannelGenerator:
             [0.077, 0.011, -0.002],  # Right temple
             [0.083, -0.060,-0.005],  # Inner right temple
         ])
+        self.simulation_type = simulation
 
     def generate_room(self, room_dim, rt60_tgt, only_direct=False):
         """Creates a room with given size and RT60."""
         e_absorption, max_order = pra.inverse_sabine(rt60_tgt, room_dim)
+        if self.simulation_type != 'room':
+            max_order = 0
+
         if not only_direct:
             room = pra.ShoeBox(room_dim,
                                fs=self.sample_rate,
                                materials=pra.Material(e_absorption),
-                               max_order=0, #max_order,
+                               max_order=max_order,
                                use_rand_ism=False)
 
-        else:
+        else:   # To simulate only the direct signal (for DRR purposes)
             room = pra.ShoeBox(room_dim,
                                fs=self.sample_rate,
                                materials=pra.Material(e_absorption),
-                               max_order=0, #max_order,
+                               max_order=0,
                                use_rand_ism=False)
 
         return room
 
-    def add_microphones(self, room, glasses_position=[3.0, 2.5, 1.5]):
+    def add_microphones(self, room, glasses_position):
         """Adds a microphone array to the room at glasses position."""
         mic_positions = self.microphone_array.T + np.array(glasses_position).reshape(3, 1)
         room.add_microphone_array(pra.MicrophoneArray(mic_positions, room.fs))
@@ -121,7 +125,7 @@ class MultiChannelGenerator:
         # Add target speaker with random azimuth location
         target_audio, target_sr = librosa.load(audio_files["target"], sr=self.sample_rate)
         target_info = audio_files["target"].split('/')
-        r_src, ph_src = 1.5, random.randrange(0, 60, 20) + 60   # ph=0 is on the x+ axis, then pi increases counter clock wise
+        r_src, ph_src = 1.5, 90   # ph=0 is on the x+ axis, then pi increases counter clock wise
         target_position, _ = self.add_speaker(room, glasses_position, target_audio,
                                               [r_src, ph_src, 0], is_target=True)
         sources_position[0] = target_position
@@ -135,7 +139,7 @@ class MultiChannelGenerator:
         # Add interfering speakers with random azimuth location
         for n, spk in enumerate(audio_files["interferes"].keys()):
             interfering_audio, interfering_sr = librosa.load(audio_files["interferes"][spk], sr=self.sample_rate)
-            r_noise, ph_noise = random.choice([3.0, 3.5]), random.randrange(80, 340, 20)+60   # for random radious:random.uniform(0.5, 2)
+            r_noise, ph_noise = random.choice([3.0, 3.5]), random.randrange(180, 361, 20)   # ph=0 is on the x+ axis, then pi increases counter clock wise
             noise_pos, noise_sig = self.add_speaker(room, glasses_position, target_audio,
                                                     [r_noise, ph_noise, 0], is_target=False, snr_db=snr,
                                                     interefering_audio=interfering_audio)

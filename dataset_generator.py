@@ -17,27 +17,39 @@ if __name__ == "__main__":
     # print(f"Done extracting audio from mpg files in {AV_DATA_FOLDER}. Saved in {A_DATA_FOLDER}")
 
     # Define dataset parameters
-    room_sizes = [[7.0, 8.0, 3.0], [10.0, 8.0, 3.0], [12.0, 9.0, 3.0]]
-    rt60_values = [0.2]#[0.3, 0.5, 0.7, 0.8]  # Different reverberation times
-    snr_values = [5, 10] #[-15, -10, -5, 0, 5]    #Different SNR levels
-    num_interfering_sources = 1
-    num_settings = len(room_sizes) * len(rt60_values) * len(snr_values)
-
-    num_pairs_per_spk = 100
-
-    output_dir = "NoReverv_1Inter"  # FIXME: "dataset_multichannel_audio"
-    clean_output_dir = output_dir + "_clean"    # FIXME: "dataset_multichannel_audio_clean"
+    snr_values = [-15, -10, -5, 0, 5]      # Different SNR levels
+    simulation = 'room'                    # Choose simulation type between 'room' or 'free_field'
+    noise = 'interfere'                     # Choose noise type between 'interfere' or 'babble'
+    num_pairs_per_spk = 1
     save = True
     verbose = False
 
-    # Create dataset
-    speaker_pairs = generate_speaker_pairs(datapath=A_DATA_FOLDER, num_samples=num_pairs_per_spk, num_interferers=num_interfering_sources)
-    dataset_generator = MultiChannelGenerator(sample_rate=16000, output_dir=output_dir, clean_output_dir=clean_output_dir, verbose=verbose, save_audio=save)
+    if simulation == 'room':
+        room_sizes = [[7.0, 8.0, 3.0], [10.0, 8.0, 3.0], [12.0, 9.0, 3.0]]
+        rt60_values = [0.3, 0.5, 0.7]           # Different reverberation times
+        sim_name = 'Reverb'
+    elif simulation == 'free_field':
+        room_sizes = [[12.0, 9.0, 3.0]]
+        rt60_values = [0.2]
+        sim_name = 'FreeField'
+    else:
+        raise ValueError('Invalid simulation request. Please choose a simulation type: room or free_field')
 
-    # num_samples_per_setting = math.ceil(len(speaker_pairs)/num_settings)
-    #
-    # if num_samples_per_setting*num_settings > len(speaker_pairs):
-    #     raise ValueError('Need to generate more pairs per speaker using generate_speaker_pairs function (select higher value for "num_samples")')
+    if noise == 'interfere':
+        num_interfering_sources = 1  # Number of interferes, choose >4 for babble noise
+        noise_name = str(num_interfering_sources)+'Inter'
+    elif noise == 'babble':
+        num_interfering_sources = 4  # Number of interferes, choose >3 for babble noise
+        noise_name = 'Babble'
+    else:
+        raise ValueError('Invalid noise request. Please choose a noise type: interfere or babble')
+
+    output_dir = sim_name+'_'+noise_name
+    clean_output_dir = output_dir + "_clean"
+
+    # Create list of audio pairs/ combination for simulations.
+    speaker_pairs = generate_speaker_pairs(datapath=A_DATA_FOLDER, num_samples=num_pairs_per_spk, num_interferers=num_interfering_sources)
+    dataset_generator = MultiChannelGenerator(sample_rate=16000, output_dir=output_dir, clean_output_dir=clean_output_dir, simulation=simulation, verbose=verbose, save_audio=save)
 
     indexes = list(range(len(speaker_pairs)))
     random.shuffle(indexes)
