@@ -24,16 +24,27 @@ This repository provides a tool to generate multi-channel audio datasets using s
 ├── .... .py             # Script to support generate dataset
 
 ├── audio/               # Input audio files (target & interference)
+
   ├── s1/                # Speaker 1 audio dir
+  
     ├── bbaf2n.wav       # audio file, .wav format
+    
     ├── bbaf3s.wav       # audio file, .wav format
+    
     .
+    
     .
+    
     .
+    
   ├── s2/
+  
   .
+  
   .
+  
   .
+  
   ├── s32/
 
 
