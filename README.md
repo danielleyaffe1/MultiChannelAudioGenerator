@@ -1,6 +1,6 @@
 # 🎧 Multi-Channel Audio Dataset Generator
 
-This repository provides a tool to generate multi-channel audio datasets using simulated room acoustics and microphone arrays. It is designed for research in audio enhancement, speech separation, and spatial audio modeling. The tool simulates reverberant environments with configurable source and microphone positions using [Pyroomacoustics](https://github.com/LCAV/pyroomacoustics).
+This repository provides a tool to generate multi-channel audio datasets using simulated room acoustics and microphone arrays. It is designed for research in multi channel audio, audio enhancement, speech separation, and spatial audio modeling. The tool simulates reverberant environments with configurable source and microphone positions using [Pyroomacoustics](https://github.com/LCAV/pyroomacoustics).
 
 ---
 
@@ -24,6 +24,17 @@ This repository provides a tool to generate multi-channel audio datasets using s
 ├── .... .py             # Script to support generate dataset
 
 ├── audio/               # Input audio files (target & interference)
+  ├── s1/                # Speaker 1 audio dir
+    ├── bbaf2n.wav       # audio file, .wav format
+    ├── bbaf3s.wav       # audio file, .wav format
+    .
+    .
+    .
+  ├── s2/
+  .
+  .
+  .
+  ├── s32/
 
 
 ---
@@ -34,12 +45,16 @@ pip install -r requirements.txt
 ---
 ## 🧪 Example Usage
 Edit dataset_generator.py:
+  - A_DATA_FOLDER --> audiodir path
+  - snr_values --> SNR: list of SNR values (dB)
+  - simulation --> simulation type: 'room' or 'free_field'
+  - noise --> noise type: 'interfere' or 'babble'
+  - num_pairs_per_spk --> Number of sample combination per target speaker with other interfering speaker: int
+  - save --> save multi channel audio in output_dir: Boolen
+  - verbose --> show progress, prints, plot a 2d room simulation, plot signals at microphones
   - Room size: list of [x,y,z] m^3 configurations
   - RT60: list of t60 values
-  - SNR: list of SNR values (dB)
   - Number of interfering speakers
-  - Number of samples for each target speaker
-  - Input audio paths
 
 Run: python dataset_generator.py
 
