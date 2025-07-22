@@ -52,7 +52,6 @@ This repository provides a tool to generate multi-channel audio datasets using s
 ## 🔧 Requirements
 pip install -r requirements.txt
 
-
 ---
 ## 🧪 Example Usage
 Edit dataset_generator.py:
@@ -69,6 +68,9 @@ Edit dataset_generator.py:
 
 Run: python dataset_generator.py
 
+---
+## EDA
+when choosing save = True, an EDA is generated automatically providing statistics on dataset.
 
 ---
 ## 📬 Contact
