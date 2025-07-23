@@ -40,7 +40,7 @@ def gender_distribution(df, output_dir):
     plt.title("Gender Distribution")
     plt.ylabel("Count")
     plt.savefig(os.path.join(output_dir, 'gender_distribution.png'), dpi=300, bbox_inches='tight')  # Adjust dpi for quality and bbox for spacing
-    plt.show()
+    # plt.show()
 
 
 # 2. Room size distribution
@@ -56,7 +56,7 @@ def room_size_distribution(df, output_dir):
     plt.ylabel("Count")
     plt.xticks(rotation=0, ha='center')
     plt.savefig(os.path.join(output_dir, 'room_size_distribution.png'), dpi=300, bbox_inches='tight')  # Adjust dpi for quality and bbox for spacing
-    plt.show()
+    # plt.show()
 
 
 # 3. RT60 distribution (Box plot instead of histogram)
@@ -70,7 +70,7 @@ def rt60_distribution(df, output_dir):
     plt.ylabel("Count")
     plt.xticks(rotation=0, ha='center')
     plt.savefig(os.path.join(output_dir,'rt60_distribution.png'), dpi=300, bbox_inches='tight')  # Adjust dpi for quality and bbox for spacing
-    plt.show()
+    # plt.show()
 
 
 # 4. SNR Distribution (Box plot instead of histogram)
@@ -84,7 +84,7 @@ def snr_distribution(df, output_dir):
     plt.ylabel("Count")
     plt.xticks(rotation=0, ha='center')
     plt.savefig(os.path.join(output_dir,'snr_distribution.png'), dpi=300, bbox_inches='tight')  # Adjust dpi for quality and bbox for spacing
-    plt.show()
+    # plt.show()
 
 
 # 5. Number of samples per speaker (Bar plot)
@@ -100,7 +100,7 @@ def samples_per_speaker(df,output_dir):
     plt.ylabel("Count")
     plt.xticks(rotation=90)
     plt.savefig(os.path.join(output_dir, 'samples_per_speaker.png'), dpi=300, bbox_inches='tight')  # Adjust dpi for quality and bbox for spacing
-    plt.show()
+    # plt.show()
 
 
 def samples_by_gender_comb(df, output_dir):
@@ -117,10 +117,10 @@ def samples_by_gender_comb(df, output_dir):
     plt.tight_layout()
 
     plt.savefig(os.path.join(output_dir, 'gender_combination_distribution.png'), dpi=300, bbox_inches='tight')
-    plt.show()
+    # plt.show()
 
 
-def main(dataset_dir, output_dir):
+def main(dataset_dir, output_dir, simulation):
     metadata = load_dataset(dataset_dir)
 
     # Convert metadata to pandas DataFrame
@@ -130,8 +130,9 @@ def main(dataset_dir, output_dir):
 
     # Run the functions
     gender_distribution(df, output_dir)
-    room_size_distribution(df, output_dir)
-    rt60_distribution(df, output_dir)
+    if simulation=='room':
+        room_size_distribution(df, output_dir)
+        rt60_distribution(df, output_dir)
     snr_distribution(df, output_dir)
     samples_per_speaker(df, output_dir)
     samples_by_gender_comb(df, output_dir)
@@ -142,6 +143,6 @@ if __name__ == '__main__':
     dataset_dir = "MultichannelAudio.json"  # Replace with meta data .json file
     output_dir = "EDA_plots"
 
-    main(dataset_dir, output_dir)
+    main(dataset_dir, output_dir, simulation='room')
 
 

@@ -120,18 +120,18 @@ def extract_audio(av_folder, audioonly_folder):
 def plot_signal_at_microphones(mic_signals, fs, start=0):
     # plot signal at microphones
     plt.figure(figsize=(15, 10))
-    start, end = 0, 3 * fs // 2
-    time_axis = np.arange(start, end) / fs  # Time in seconds
-    step_size = 0.1  # X-axis tick interval
+    step_size = 0.2  # X-axis tick interval
     for i in range(mic_signals.shape[0]):
         plt.subplot(4, 1, i + 1)
-        mic_signal = mic_signals[i, start : end]
+        end = len(mic_signals[i])
+        time_axis = np.arange(start, end) / fs  # Time in seconds
+        mic_signal = mic_signals[i, start:end]
         #plt.plot(np.arange(len(mic_signal)) / fs, mic_signal)
-        plt.plot(np.arange(start,  3 * fs//2) / fs, mic_signal)
+        plt.plot(time_axis, mic_signal)
         plt.title("Microphone {} Signal".format(i + 1))
         plt.xlabel("Time [s]")
         plt.xticks(np.arange(time_axis[0], time_axis[-1], step_size))
-        plt.yticks(np.arange(-1, 1.1, 0.5))  # Step by 0.1
+        #plt.yticks(np.arange(-1, 1.1, 0.5))  # Step by 0.1
 
         plt.grid(True)
 
@@ -211,7 +211,7 @@ def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_
         plt.show()
 
 
-def generate_speaker_pairs(datapath, num_samples=None, num_interferers=1):
+def generate_speaker_pairs(datapath, num_samples=None, num_interferers=1, max_total_samples=None):
     """
     Generates `num_samples` target-interferer pairs per speaker.
     - Each speaker is a target `num_samples` times.
@@ -257,6 +257,8 @@ def generate_speaker_pairs(datapath, num_samples=None, num_interferers=1):
                 "interferer_ids": interferes
             })
             sample_id += 1
+            if (max_total_samples is not None) and (sample_id == max_total_samples):
+                return speaker_pairs
 
     return speaker_pairs
 

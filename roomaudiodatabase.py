@@ -64,7 +64,7 @@ class MultiChannelGenerator:
         snr_linear = 10 ** (snr_db / 10)
         return noise_signal * np.sqrt(clean_power / (snr_linear * noise_power))
 
-    def add_speaker(self, room, glasses_position, audio, relative_position=[1.0, 90, 0], is_target=False, snr_db=None, interefering_audio=None):
+    def add_speaker(self, room, glasses_position, audio, relative_position=[1.5, 90, 0], is_target=False, snr_db=None, interefering_audio=None):
         """Adds a speaker at a relative position to the listener."""
         r, phi, _ = relative_position
         position = glasses_position + np.array([r * np.cos(phi * np.pi / 180), r * np.sin(phi * np.pi / 180), 0])
@@ -189,11 +189,12 @@ class MultiChannelGenerator:
 
             del rir_direct, room_direct, signals_direct
 
+        rt60 = room.measure_rt60(plot=False) # measure the reverberation time, to show plot add plt.show() inside function
+
         if self.verbose:
             plot_room_2d(room, sources_position, mic_positions, T60=rt60_tgt, drr_dB=drr_db, sample_ID=sample_id, output_dir=None)
-            rt60 = room.measure_rt60(plot=False) # measure the reverberation time, to show plot add plt.show() inside function
             print("The desired RT60 was {}, measured was {}".format(rt60_tgt, rt60[0][0]))
-            plot_signal_at_microphones(signals, self.sample_rate, start=r_src/343)
+            plot_signal_at_microphones(signals, self.sample_rate)
 
         genders = get_gender_category(audio_files["target_id"], audio_files["interferer_ids"])
 
@@ -204,7 +205,7 @@ class MultiChannelGenerator:
                 "interference_positions": [[round(x, 3) for x in pos] for pos in sources_position[1:]],
                 "gender": genders,
                 "room_dim": room_dim,
-                "rt60": rt60_tgt,
+                "rt60": round(rt60[0][0], 1),
                 "snr": snr,
                 "DRR": float(round(drr_db, 3)),
                 "num_channels": len(self.microphone_array),

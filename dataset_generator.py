@@ -20,7 +20,7 @@ if __name__ == "__main__":
     snr_values = [-15, -10, -5, 0, 5]      # Different SNR levels
     simulation = 'room'                    # Choose simulation type between 'room' or 'free_field'
     noise = 'interfere'                     # Choose noise type between 'interfere' or 'babble'
-    num_pairs_per_spk = 1
+    num_pairs_per_spk = None                # None = create pairs for all target files (max possible)
     save = True
     verbose = False
 
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     clean_output_dir = output_dir + "_clean"
 
     # Create list of audio pairs/ combination for simulations.
-    speaker_pairs = generate_speaker_pairs(datapath=A_DATA_FOLDER, num_samples=num_pairs_per_spk, num_interferers=num_interfering_sources)
+    speaker_pairs = generate_speaker_pairs(datapath=A_DATA_FOLDER, num_samples=num_pairs_per_spk, num_interferers=num_interfering_sources, max_total_samples=None)
     dataset_generator = MultiChannelGenerator(sample_rate=16000, output_dir=output_dir, clean_output_dir=clean_output_dir, simulation=simulation, verbose=verbose, save_audio=save)
 
     indexes = list(range(len(speaker_pairs)))
@@ -78,7 +78,7 @@ if __name__ == "__main__":
 
     # EDA
     if save:
-        main(f"{output_dir}.json",f"{output_dir}_plots")
+        main(f"{output_dir}.json",f"{output_dir}_EDAplots", simulation=simulation)
 
 
 
