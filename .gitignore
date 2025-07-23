@@ -5,10 +5,8 @@ env/
 __pycache__/
 cleanaudiodata/
 cleandata/
-NoReverv_1Inter/
-NoReverv_1Inter_clean/
-NoReverv_1Inter_plots/
-NoReverv_1Inter.json
+Reverb_*
+FreeField_*
 *.db
 .DS_Store
 .idea/
