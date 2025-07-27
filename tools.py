@@ -4,11 +4,11 @@ from scipy.signal import correlate
 import librosa
 import sounddevice as sd
 import pygame as pg
-pg.init()
-pg.display.set_caption('MoviePy')
 from moviepy.editor import VideoFileClip
 import os
 import random
+pg.init()
+pg.display.set_caption('MoviePy')
 
 
 def plot_time_domain(signal, sr):
@@ -139,16 +139,23 @@ def plot_signal_at_microphones(mic_signals, fs, start=0):
     plt.show()
 
 
-def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_dB=None, output_dir=None):
+def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_dB=None, output_dir=None, directivity=False, azimuth_deg=None):
     """
     Plots a 2D representation of the room with the speaker and microphone positions.
 
     Parameters:
     - room: pyroomacoustics.ShoeBox object (room definition)
-    - source_position: np.array of shape (2,) representing the speaker position (x, y)
-    - mic_positions: np.array of shape (2, N) where N is the number of microphones
+    - source_position: np.array of shape (2,) or (2, N) representing source positions (x, y)
+    - mic_positions: np.array of shape (2, N) representing microphone positions (x, y)
+    - sample_ID: identifier for the sample
+    - T60: RT60 value (optional)
+    - drr_dB: Direct-to-reverberant ratio in dB (optional)
+    - output_dir: directory to save the plot
+    - directivity: bool, whether to draw directivity arrows
+    - azimuth: float, azimuth angle in degrees for shared directivity
     """
-
+    if directivity and azimuth_deg is None:
+        raise ValueError("If directivity is chosen to be presented in the plot, an azimuth angle must be provided")
     source_positionT = source_position.T
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.set_xlim(0, room.shoebox_dim[0])
@@ -163,10 +170,26 @@ def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_
     # Plot microphone positions
     ax.scatter(mic_positions[0], mic_positions[1], marker='*', s=10, label='Microphones')
 
+    # Plot a single directivity arrow
+    if directivity:
+        # Use center point between microphones for arrow origin
+        center_x = np.mean(mic_positions[0])
+        center_y = np.mean(mic_positions[1])
+        azimuth_rad = np.deg2rad(azimuth_deg)
+        dx = 0.3 * np.cos(azimuth_rad)
+        dy = 0.3 * np.sin(azimuth_rad)
+        ax.arrow(center_x, center_y, dx, dy, head_width=0.2, head_length=0.2,
+                 fc='blue', ec='blue', label=f'Directivity ({azimuth_deg}°)')
+
     # Labels and legend
     ax.set_xlabel("X (meters)")
     ax.set_ylabel("Y (meters)")
-    ax.set_title(f"Room Simulation for Sample ID {sample_ID}\n Room Size: {room.shoebox_dim[0]}m x {room.shoebox_dim[1]}m | RT60: {T60}s | DRR: {drr_dB:.3f} dB")
+    title = f"Room Simulation: {sample_ID}\n Room Size: {room.shoebox_dim[0]}m x {room.shoebox_dim[1]}m"
+    if T60 is not None:
+        title += f" | RT60: {T60}s"
+    if drr_dB is not None:
+        title += f" | DRR: {drr_dB:.2f} dB"
+    ax.set_title(title)
     ax.legend()
     ax.grid(True)
 
@@ -192,14 +215,26 @@ def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_
     for i, source in enumerate(source_position):
         ax2.scatter(source_positionT[0][i], source_positionT[1][i], color=colors[i], marker='o', s=50, label=labels[i])
 
-    labels = ['Left temple', 'Above nose', 'Right temple', 'Inner right temple']
-    for i, label in enumerate(labels):
-        ax2.scatter(mic_positions[0][i], mic_positions[1][i], marker='*', s=15, label=labels[i])
+    if directivity:
+        labels = ['Left', 'Right']
+        ax2.arrow(center_x, center_y, dx, dy, head_width=0.2, head_length=0.05,
+                  fc='blue', ec='blue', label=f'Directivity ({azimuth_deg}°)')
+        for i, label in enumerate(labels):
+            ax2.scatter(mic_positions[0][0], mic_positions[1][0], marker='*', s=15, label=labels[i])
 
+    else:
+        labels = ['Left temple', 'Above nose', 'Right temple', 'Inner right temple']
+        for i, label in enumerate(labels):
+            ax2.scatter(mic_positions[0][i], mic_positions[1][i], marker='*', s=15, label=labels[i])
 
     ax2.set_xlabel("X (meters)")
     ax2.set_ylabel("Y (meters)")
-    ax2.set_title(f"Zoomed-in: Speaker & Microphones for Sample ID {sample_ID}\n Room Size: {room.shoebox_dim[0]}m x {room.shoebox_dim[1]}m | RT60: {T60}s | DRR: {drr_dB:.3f} dB")
+    title = f"Zoomed-in: Speaker & Microphones for Sample ID {sample_ID}\n Room Size: {room.shoebox_dim[0]}m x {room.shoebox_dim[1]}m"
+    if T60 is not None:
+        title += f" | RT60: {T60}s"
+    if drr_dB is not None:
+        title += f" | DRR: {drr_dB:.2f} dB"
+    ax2.set_title(title)
     ax2.legend()
     ax2.grid(True)
 
@@ -216,7 +251,7 @@ def generate_speaker_pairs(datapath, num_samples=None, num_interferers=1, max_to
     Generates `num_samples` target-interferer pairs per speaker.
     - Each speaker is a target `num_samples` times.
     - Sentences are stored as file paths.
-    - Interferers are chosen dynamically (excluding the target).
+    - Interferes are chosen dynamically (excluding the target).
     """
     audio_files = {}
     for speaker in os.listdir(datapath):

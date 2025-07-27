@@ -17,12 +17,14 @@ if __name__ == "__main__":
     # print(f"Done extracting audio from mpg files in {AV_DATA_FOLDER}. Saved in {A_DATA_FOLDER}")
 
     # Define dataset parameters
-    snr_values = [-15, -10, -5, 0, 5]      # Different SNR levels
+    snr_values = [5]#[-15, -10, -5, 0, 5]      # Different SNR levels
     simulation = 'room'                    # Choose simulation type between 'room' or 'free_field'
-    noise = 'interfere'                     # Choose noise type between 'interfere' or 'babble'
+    noise = 'babble'                     # Choose noise type between 'interfere' or 'babble'
     num_pairs_per_spk = None                # None = create pairs for all target files (max possible)
-    save = True
+    save_multichannel = True
+    save_binaural = True
     verbose = False
+    EDA = False
 
     if simulation == 'room':
         room_sizes = [[7.0, 8.0, 3.0], [10.0, 8.0, 3.0], [12.0, 9.0, 3.0]]
@@ -48,8 +50,12 @@ if __name__ == "__main__":
     clean_output_dir = output_dir + "_clean"
 
     # Create list of audio pairs/ combination for simulations.
-    speaker_pairs = generate_speaker_pairs(datapath=A_DATA_FOLDER, num_samples=num_pairs_per_spk, num_interferers=num_interfering_sources, max_total_samples=None)
-    dataset_generator = MultiChannelGenerator(sample_rate=16000, output_dir=output_dir, clean_output_dir=clean_output_dir, simulation=simulation, verbose=verbose, save_audio=save)
+    speaker_pairs = generate_speaker_pairs(datapath=A_DATA_FOLDER, num_samples=num_pairs_per_spk, num_interferers=num_interfering_sources, max_total_samples=1)
+    dataset_generator = MultiChannelGenerator(sample_rate=16000,
+                                              output_dir=output_dir,
+                                              clean_output_dir=clean_output_dir,
+                                              simulation=simulation,
+                                              verbose=verbose)
 
     indexes = list(range(len(speaker_pairs)))
     random.shuffle(indexes)
@@ -61,10 +67,18 @@ if __name__ == "__main__":
             snr, room_dim, rt60_tgt = random.choice(snr_values), random.choice(room_sizes), random.choice(rt60_values)
 
             audio_files = speaker_pairs[indexes[idx]]
-            sample_meta_data = dataset_generator.generate_multichannel_audio(room_dim, rt60_tgt, snr,
-                                                                             audio_files,
-                                                                             num_interfering_sources)
-            if save:
+            if idx==len(speaker_pairs)-1:
+                dataset_generator.verbose = True
+            sample_meta_data = dataset_generator.generate_multichannel_audio(room_dim=room_dim,
+                                                                             rt60_tgt=rt60_tgt,
+                                                                             snr=snr,
+                                                                             audio_files=audio_files,
+                                                                             num_interfering_sources=num_interfering_sources,
+                                                                             with_DRR=True,
+                                                                             save_audio=save_multichannel)
+            dataset_generator.generate_binaural_audio(room_dim, rt60_tgt, snr, audio_files, num_interfering_sources,
+                                                    azimuth_deg=90.0, save_audio=save_binaural)
+            if save_multichannel:
                 with open(f"{output_dir}.json", "a") as f:
                     json.dump(sample_meta_data, f)  # Dump each dictionary separately
                     f.write("\n")  # Add a newline after each JSON object
@@ -74,15 +88,8 @@ if __name__ == "__main__":
             pbar.update(1)
             idx += 1
 
-    print(f"Dataset generation complete! {idx} samples processed. Save status: {save}.")
+    print(f"Dataset generation complete! {idx} samples processed. Save status: Multi channel:{save_multichannel}, Binaural:{save_binaural}")
 
     # EDA
-    if save:
-        main(f"{output_dir}.json",f"{output_dir}_EDAplots", simulation=simulation)
-
-
-
-
-
-
-
+    if EDA:
+        main(f"{output_dir}.json", f"{output_dir}_EDAplots", simulation=simulation)

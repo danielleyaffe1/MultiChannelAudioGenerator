@@ -8,10 +8,11 @@ import librosa
 from tools import plot_room_2d, play_audio, plot_signal_at_microphones, get_gender_category
 import sounddevice as sd
 import matplotlib.pyplot as plt
+from pyroomacoustics.directivities import MeasuredDirectivityFile, Rotation3D
 
 
 class MultiChannelGenerator:
-    def __init__(self, sample_rate=16000, output_dir=None, clean_output_dir=None, simulation='room', verbose=False, save_audio=True):
+    def __init__(self, sample_rate=16000, output_dir=None, clean_output_dir=None, simulation='room', verbose=False):
         self.sample_rate = sample_rate
         self.output_dir = output_dir
         if self.output_dir:
@@ -20,7 +21,6 @@ class MultiChannelGenerator:
         if self.clean_output_dir:
             os.makedirs(clean_output_dir, exist_ok=True)
         self.verbose = verbose
-        self.save_audio = save_audio
         self.microphone_array = np.array([
             [-0.082, -0.029, -0.005],  # Left temple
             [0.001, 0.030, -0.001],  # Above nose
@@ -39,10 +39,10 @@ class MultiChannelGenerator:
             room = pra.ShoeBox(room_dim,
                                fs=self.sample_rate,
                                materials=pra.Material(e_absorption),
-                               max_order=max_order,
+                               max_order=40, # FIXME
                                use_rand_ism=False)
 
-        else:   # To simulate only the direct signal (for DRR purposes)
+        else:   # To simulate only the direct signal
             room = pra.ShoeBox(room_dim,
                                fs=self.sample_rate,
                                materials=pra.Material(e_absorption),
@@ -89,6 +89,14 @@ class MultiChannelGenerator:
         """Saves a multi-channel audio"""
         for i, signal in enumerate(signals):
             self.save_single_channel_audio(filename+f'_CH{i}', signal)
+
+    def save_binaural_audio(self, filename, signals):
+        """Saves a binaural audio
+            Expecting signals[0] to be the left ear and signals[1] to be the right"""
+        if signals.shape[0] != 2:
+            raise ValueError('Input to save_binaural_audio must be left and right ear signals')
+        sf.write(filename+'.wav', signals.T, self.sample_rate)
+
     def play_audio(self, signal):
         '''
         Play single audio
@@ -104,7 +112,7 @@ class MultiChannelGenerator:
         sd.play(signal, self.sample_rate)
         sd.wait()  # Wait for playback to finish
 
-    def generate_multichannel_audio(self, room_dim, rt60_tgt, snr, audio_files, num_interfering_sources=1, with_DRR=True):
+    def generate_multichannel_audio(self, room_dim, rt60_tgt, snr, audio_files, num_interfering_sources=1, with_DRR=False, save_audio=False):
         """
         Generates a multichannel audio with room size, RT60, and SNR condition with possible interfering sources.
 
@@ -125,7 +133,7 @@ class MultiChannelGenerator:
         # Add target speaker with random azimuth location
         target_audio, target_sr = librosa.load(audio_files["target"], sr=self.sample_rate)
         target_info = audio_files["target"].split('/')
-        r_src, ph_src = 1.5, 90   # ph=0 is on the x+ axis, then pi increases counter clock wise
+        r_src, ph_src = 0.5, 90   # ph=0 is on the x+ axis, then pi increases counter clock wise
         target_position, _ = self.add_speaker(room, glasses_position, target_audio,
                                               [r_src, ph_src, 0], is_target=True)
         sources_position[0] = target_position
@@ -156,44 +164,53 @@ class MultiChannelGenerator:
         sentence = target_info[2].split('.')[0]
         # Save to file
         if self.output_dir:
-            sampledir = self.output_dir #f"{self.output_dir}/{sample_id}/"
-            os.makedirs(sampledir, exist_ok=True)
-            filename = os.path.join(sampledir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
-            if self.save_audio:
+            filename = os.path.join(self.output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
+            if save_audio:
                 self.save_multi_channel_audio(filename, signals)
 
         drr_db = None
-
-        if with_DRR or (self.clean_output_dir and self.save_audio):
-            rir_full = room.rir[1][0]
-            # create a room simulation with only the direct signal
-            room_direct = self.generate_room(room_dim, rt60_tgt, only_direct=True)
-            self.add_microphones(room_direct, glasses_position)
-            self.add_speaker(room_direct, glasses_position, target_audio,[r_src, ph_src, 0], is_target=True)
-            room_direct.simulate()
-            rir_direct = room_direct.rir[1][0]  # RIR for mic 0 and source 0
-            signals_direct = room_direct.mic_array.signals
+        if with_DRR or save_audio:
+            # create a room simulation with only the target speaker to use as target data
+            room_only_target = self.generate_room(room_dim, rt60_tgt, only_direct=False)
+            self.add_microphones(room_only_target, glasses_position)
+            self.add_speaker(room_only_target, glasses_position, target_audio, [r_src, ph_src, 0], is_target=True)
+            room_only_target.simulate()
+            rir_only_target = room_only_target.rir[1][0]  # RIR for mic 0 and source 0
+            signals_only_target = room_only_target.mic_array.signals
 
             # Save to file
-            if self.clean_output_dir and self.save_audio:
-                sampledir = self.clean_output_dir #f"{self.clean_output_dir}/{sample_id}/"
-                os.makedirs(sampledir, exist_ok=True)
-                filename = os.path.join(sampledir,f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
-                self.save_multi_channel_audio(filename, signals_direct)
+            if save_audio:
+                if self.clean_output_dir is None:
+                    raise ValueError('A clean output directory has not been provided')
+                filename = os.path.join(self.clean_output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
+                self.save_multi_channel_audio(filename, signals_only_target)
 
             if with_DRR:
-                # Compute energy of direct path and reverberant path
-                direct_energy = np.sum(rir_direct ** 2)
-                reverb_energy = np.sum(rir_full ** 2) - direct_energy  # Remove direct energy from full RIR
-                drr_db = 10 * np.log10(direct_energy / (reverb_energy + 1e-10))  # Avoid division by zero
+                window_ms = 1.0
+                peak_idx = np.argmax(np.abs(rir_only_target))
+                window_samples = int(window_ms * self.sample_rate / 1000)
 
-            del rir_direct, room_direct, signals_direct
+                start = max(0, peak_idx - window_samples)
+                end = min(len(rir_only_target), peak_idx + window_samples)
+
+                rir_direct = rir_only_target[start:end]
+                rir_reverb = np.concatenate((rir_only_target[:start], rir_only_target[end:]))
+
+                direct_energy = np.sum(rir_direct ** 2)
+                reverb_energy = np.sum(rir_reverb ** 2)
+
+                drr_db = 10 * np.log10(direct_energy / (reverb_energy + 1e-10))  # Avoid division by zero
+                #room_only_target.plot_rir(FD=False)
+
+            del room_only_target, signals_only_target, rir_only_target, rir_reverb, rir_direct
 
         rt60 = room.measure_rt60(plot=False) # measure the reverberation time, to show plot add plt.show() inside function
 
         if self.verbose:
-            plot_room_2d(room, sources_position, mic_positions, T60=rt60_tgt, drr_dB=drr_db, sample_ID=sample_id, output_dir=None)
+            plot_room_2d(room, sources_position, mic_positions, sample_ID=sample_id, T60=round(rt60[0][0], 1),
+                         drr_dB=drr_db, output_dir=None)
             print("The desired RT60 was {}, measured was {}".format(rt60_tgt, rt60[0][0]))
+            print(f'DRR DB: {drr_db}')
             plot_signal_at_microphones(signals, self.sample_rate)
 
         genders = get_gender_category(audio_files["target_id"], audio_files["interferer_ids"])
@@ -203,15 +220,113 @@ class MultiChannelGenerator:
                 "target_position": [round(x, 3) for x in target_position],
                 "interferes": audio_files["interferes"],
                 "interference_positions": [[round(x, 3) for x in pos] for pos in sources_position[1:]],
-                "gender": genders,
                 "room_dim": room_dim,
                 "rt60": round(rt60[0][0], 1),
                 "snr": snr,
                 "DRR": float(round(drr_db, 3)),
                 "num_channels": len(self.microphone_array),
+                "gender": genders,
                 "file": filename
                 }
 
+    def generate_binaural_audio(self, room_dim, rt60_tgt, snr, audio_files, num_interfering_sources=1,
+                                azimuth_deg=-45.0, colatitude_deg=90.0, save_audio=True):
+
+        sources_position = np.zeros((num_interfering_sources + 1, len(room_dim)))
+
+        # Create room and microphone setup
+        room = self.generate_room(room_dim, rt60_tgt)
+        glasses_position = [room_dim[0] / 2, room_dim[1] / 2, 1.5]  # michrophones set in the middle of the room
+
+        # Add target speaker with random azimuth location
+        target_audio, target_sr = librosa.load(audio_files["target"], sr=self.sample_rate)
+        #target_audio = target_audio * (0.95 / abs(target_audio).max())
+
+        hrtf = MeasuredDirectivityFile(
+            path='mit_kemar_normal_pinna.sofa',
+            fs=self.sample_rate,
+            interp_order=12,
+            interp_n_points=1000,
+        )
+        orientation = Rotation3D([colatitude_deg, azimuth_deg], "yz", degrees=True)
+        dir_left = hrtf.get_mic_directivity("left", orientation=orientation)
+        dir_right = hrtf.get_mic_directivity("right", orientation=orientation)
+
+        room.add_microphone(np.array(glasses_position).reshape(3, 1), directivity=dir_left)
+        room.add_microphone(np.array(glasses_position).reshape(3, 1), directivity=dir_right)
+
+        target_info = audio_files["target"].split('/')
+        r_src, ph_src = 0.5, 90  # ph=0 is on the x+ axis, then pi increases counter clock wise
+        target_position, _ = self.add_speaker(room, glasses_position, target_audio,
+                                              [r_src, ph_src, 0], is_target=True)
+        sources_position[0] = target_position
+
+        if num_interfering_sources != len(audio_files["interferes"]):
+            raise ValueError(
+                'Number of wanted interfering sources must match to generated target-interference definition')
+        if self.verbose:
+            print('Target:', audio_files["target"], 'Position:', target_position)
+            print('Number of Interfering Sources:', num_interfering_sources)
+
+        # Add interfering speakers with random azimuth location
+        for n, spk in enumerate(audio_files["interferes"].keys()):
+            interfering_audio, interfering_sr = librosa.load(audio_files["interferes"][spk], sr=self.sample_rate)
+            r_noise, ph_noise = random.choice([3.0, 3.5]), random.randrange(180, 361,
+                                                                            20)  # ph=0 is on the x+ axis, then pi increases counter clock wise
+            noise_pos, noise_sig = self.add_speaker(room, glasses_position, target_audio,
+                                                    [r_noise, ph_noise, 0], is_target=False, snr_db=snr,
+                                                    interefering_audio=interfering_audio)
+            if self.verbose:
+                print('Interfere:', audio_files["interferes"][spk], 'Position:', noise_pos)
+            sources_position[n + 1] = noise_pos
+
+        # Simulate and get binaural signals
+        room.simulate()
+        binaural_signals = room.mic_array.signals
+        #binaural_signals *= 0.95 / abs(binaural_signals).max()
+        #binaural_signals = (binaural_signals * 2 ** 15).astype(np.int16)
+
+        filename = 'None'
+        sample_id = audio_files["ID"]
+        sentence = target_info[2].split('.')[0]
+        # Save to file
+        if self.output_dir:
+            sampledir = self.output_dir+'_Binaural'  # f"{self.output_dir}/{sample_id}/"
+            os.makedirs(sampledir, exist_ok=True)
+            filename = os.path.join(sampledir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
+            if save_audio:
+                self.save_binaural_audio(filename, binaural_signals)
+
+        rt60 = room.measure_rt60(
+            plot=False)  # measure the reverberation time, to show plot add plt.show() inside function
+
+        if self.verbose:
+            plot_room_2d(room, sources_position, np.array(glasses_position).reshape(3, 1), sample_ID=sample_id,
+                         T60=round(rt60[0][0], 1), output_dir=None,directivity=True, azimuth_deg=azimuth_deg)
+            print("The desired RT60 was {}, measured was {}".format(rt60_tgt, rt60[0][0]))
+            room.plot_rir(FD=True)
+            room.plot_rir(FD=False)
+            plot_signal_at_microphones(binaural_signals, self.sample_rate)
+
+        genders = get_gender_category(audio_files["target_id"], audio_files["interferer_ids"])
+
+        # Print meta data
+        if self.verbose:
+            print(
+                "sample_id:", sample_id,
+                "target:", audio_files["target"],
+                "target_position:", [round(x, 3) for x in target_position],
+                "interferes:", audio_files["interferes"],
+                "interference_positions:", [[round(x, 3) for x in pos] for pos in sources_position[1:]],
+                "azimuth_deg:", azimuth_deg,
+                "room_dim:", room_dim,
+                "rt60:", round(rt60[0][0], 1),
+                "snr:", snr,
+                "gender:", genders,
+                "file:", filename
+            )
+
+        return
 
 def chk_speaker_position_in_room(position, Lx, Ly, glasses_position):
     '''check speaker position in room.
