@@ -17,10 +17,11 @@ if __name__ == "__main__":
     # print(f"Done extracting audio from mpg files in {AV_DATA_FOLDER}. Saved in {A_DATA_FOLDER}")
 
     # Define dataset parameters
-    snr_values = [-15, -10, -5, 0, 5]      # Different SNR levels
+    snr_values = [-5, 0, 5]      # Different SNR levels
     simulation = 'room'                    # Choose simulation type between 'room' or 'free_field'
     noise = 'babble'                     # Choose noise type between 'interfere' or 'babble'
     num_pairs_per_spk = None                # None = create pairs for all target files (max possible)
+    max_total_samples = 10                  # Maximum data samples
     save_multichannel = True
     save_binaural = True
     verbose = False
@@ -50,7 +51,7 @@ if __name__ == "__main__":
     clean_output_dir = output_dir + "_clean"
 
     # Create list of audio pairs/ combination for simulations.
-    speaker_pairs = generate_speaker_pairs(datapath=A_DATA_FOLDER, num_samples=num_pairs_per_spk, num_interferers=num_interfering_sources, max_total_samples=None)
+    speaker_pairs = generate_speaker_pairs(datapath=A_DATA_FOLDER, num_samples=num_pairs_per_spk, num_interferers=num_interfering_sources, max_total_samples=max_total_samples)
     dataset_generator = MultiChannelGenerator(sample_rate=16000,
                                               output_dir=output_dir,
                                               clean_output_dir=clean_output_dir,
@@ -69,6 +70,8 @@ if __name__ == "__main__":
             audio_files = speaker_pairs[indexes[idx]]
             if idx==len(speaker_pairs)-1:
                 dataset_generator.verbose = True
+                dataset_generator.verbose_outpur_dir = output_dir+'_plots'
+                os.makedirs(output_dir+'_plots', exist_ok=True)
             sample_meta_data = dataset_generator.generate_multichannel_audio(room_dim=room_dim,
                                                                              rt60_tgt=rt60_tgt,
                                                                              snr=snr,

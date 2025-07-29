@@ -12,7 +12,7 @@ from pyroomacoustics.directivities import MeasuredDirectivityFile, Rotation3D
 
 
 class MultiChannelGenerator:
-    def __init__(self, sample_rate=16000, output_dir=None, clean_output_dir=None, simulation='room', verbose=False):
+    def __init__(self, sample_rate=16000, output_dir=None, clean_output_dir=None, simulation='room', verbose=False, verbose_outpur_dir=None):
         self.sample_rate = sample_rate
         self.audio_length = 3   # sec
         self.output_dir = output_dir
@@ -22,6 +22,9 @@ class MultiChannelGenerator:
         if self.clean_output_dir:
             os.makedirs(clean_output_dir, exist_ok=True)
         self.verbose = verbose
+        self.verbose_outpur_dir = verbose_outpur_dir
+        if self.verbose_outpur_dir:
+            os.makedirs(verbose_outpur_dir, exist_ok=True)
         self.microphone_array = np.array([
             [-0.082, -0.029, -0.005],  # Left temple
             [0.001, 0.030, -0.001],  # Above nose
@@ -219,10 +222,10 @@ class MultiChannelGenerator:
 
         if self.verbose:
             plot_room_2d(room, sources_position, mic_positions, sample_ID=sample_id, T60=round(rt60[0][0], 1),
-                         drr_dB=drr_db, output_dir=None)
+                         drr_dB=drr_db, output_dir=self.verbose_outpur_dir)
             print("The desired RT60 was {}, measured was {}".format(rt60_tgt, rt60[0][0]))
             print(f'DRR DB: {drr_db}')
-            plot_signal_at_microphones(signals, self.sample_rate)
+            plot_signal_at_microphones(signals, self.sample_rate, output_dir=self.verbose_outpur_dir)
 
         genders = get_gender_category(audio_files["target_id"], audio_files["interferer_ids"])
 
@@ -315,11 +318,11 @@ class MultiChannelGenerator:
 
         if self.verbose:
             plot_room_2d(room, sources_position, np.array(glasses_position).reshape(3, 1), sample_ID=sample_id,
-                         T60=round(rt60[0][0], 1), output_dir=None,directivity=True, azimuth_deg=azimuth_deg)
+                         T60=round(rt60[0][0], 1), output_dir=self.verbose_outpur_dir,directivity=True, azimuth_deg=azimuth_deg)
             print("The desired RT60 was {}, measured was {}".format(rt60_tgt, rt60[0][0]))
             room.plot_rir(FD=True)
             room.plot_rir(FD=False)
-            plot_signal_at_microphones(binaural_signals, self.sample_rate)
+            plot_signal_at_microphones(binaural_signals, self.sample_rate, output_dir=self.verbose_outpur_dir, binaural=True)
 
         genders = get_gender_category(audio_files["target_id"], audio_files["interferer_ids"])
 

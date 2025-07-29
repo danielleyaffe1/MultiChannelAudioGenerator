@@ -117,7 +117,7 @@ def extract_audio(av_folder, audioonly_folder):
             print(f'All .mpg files from speaker {speaker_dir} have been saved as .wav files')
 
 
-def plot_signal_at_microphones(mic_signals, fs, start=0):
+def plot_signal_at_microphones(mic_signals, fs, start=0, output_dir=None, binaural=False):
     # plot signal at microphones
     plt.figure(figsize=(15, 10))
     step_size = 0.2  # X-axis tick interval
@@ -136,7 +136,14 @@ def plot_signal_at_microphones(mic_signals, fs, start=0):
         plt.grid(True)
 
     plt.subplots_adjust(hspace=1.3)  # Increase vertical space
-    plt.show()
+    if output_dir:
+        if binaural:
+            filename = os.path.join(output_dir, 'binaural_signals.png')
+        else:
+            filename = os.path.join(output_dir, 'microphone_signals.png')
+        plt.savefig(filename)
+    else:
+        plt.show()
 
 
 def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_dB=None, output_dir=None, directivity=False, azimuth_deg=None):
