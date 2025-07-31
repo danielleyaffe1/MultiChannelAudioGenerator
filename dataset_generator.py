@@ -17,15 +17,15 @@ if __name__ == "__main__":
     # print(f"Done extracting audio from mpg files in {AV_DATA_FOLDER}. Saved in {A_DATA_FOLDER}")
 
     # Define dataset parameters
-    snr_values = [-5, 0, 5]      # Different SNR levels
+    snr_values = [-10, -5, 0, 5]      # Different SNR levels
     simulation = 'room'                    # Choose simulation type between 'room' or 'free_field'
     noise = 'babble'                     # Choose noise type between 'interfere' or 'babble'
-    num_pairs_per_spk = None                # None = create pairs for all target files (max possible)
-    max_total_samples = 10                  # Maximum data samples
+    num_pairs_per_spk = 20                # None = create pairs for all target files (max possible)
+    max_total_samples = 200                  # Maximum data samples
     save_multichannel = True
-    save_binaural = True
+    save_binaural = False
     verbose = False
-    EDA = False
+    EDA = True
 
     if simulation == 'room':
         room_sizes = [[7.0, 8.0, 3.0], [10.0, 8.0, 3.0], [12.0, 9.0, 3.0]]
@@ -79,7 +79,8 @@ if __name__ == "__main__":
                                                                              num_interfering_sources=num_interfering_sources,
                                                                              with_DRR=True,
                                                                              save_audio=save_multichannel)
-            dataset_generator.generate_binaural_audio(room_dim, rt60_tgt, snr, audio_files, num_interfering_sources,
+            if save_binaural:
+                dataset_generator.generate_binaural_audio(room_dim, rt60_tgt, snr, audio_files, num_interfering_sources,
                                                     azimuth_deg=90.0, save_audio=save_binaural)
             if save_multichannel:
                 with open(f"{output_dir}.json", "a") as f:
@@ -95,4 +96,4 @@ if __name__ == "__main__":
 
     # EDA
     if EDA:
-        main(f"{output_dir}.json", f"{output_dir}_EDAplots", simulation=simulation)
+        main(f"{output_dir}.json", f"{output_dir}_plots", simulation=simulation)
