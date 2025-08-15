@@ -1,4 +1,5 @@
 from tools.tools import *
+from tools.EDA import EDA_main
 from roomaudiodatabase import MultiChannelGenerator
 import json
 import random
@@ -22,9 +23,9 @@ if __name__ == "__main__":
     max_total_samples = 1                  # Maximum data samples
     save_multichannel = True            # Save multi channel mixed audio and clean seperately
     save_noise_audio = True             # Save multi channel noise audio - for IRM calculaiton...
-    save_binaural = False
+    save_binaural = True
     verbose = False
-    EDA = False
+    EDA = True
 
     if simulation == 'room':
         room_sizes = [[7.0, 8.0, 3.0], [10.0, 8.0, 3.0], [12.0, 9.0, 3.0]]
@@ -46,7 +47,7 @@ if __name__ == "__main__":
     else:
         raise ValueError('Invalid noise request. Please choose a noise type: interfere or babble')
 
-    output_dir = 'test_'+sim_name+'_'+noise_name
+    output_dir = 'tmp_'+sim_name+'_'+noise_name
     clean_output_dir = output_dir + "_clean"
     noise_output_dir = output_dir + "_noise"
 
@@ -98,4 +99,4 @@ if __name__ == "__main__":
 
     # EDA
     if EDA:
-        main(f"{output_dir}.json", f"{output_dir}_plots", simulation=simulation)
+        EDA_main(f"{output_dir}.json", f"{output_dir}_plots", simulation=simulation)

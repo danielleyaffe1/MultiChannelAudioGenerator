@@ -41,7 +41,7 @@ def plot_stft(signal, sr, output_dir=None, signal_name=None):
     plt.grid(True)
     plt.tight_layout()
     if output_dir:
-        filename = os.path.join(output_dir, signal_name+'_STFT.png')
+        filename = os.path.join(output_dir, 'STFT_'+signal_name+'.png')
         plt.savefig(filename)
     #plt.show()
 
@@ -145,8 +145,8 @@ def plot_signal_at_microphones(mic_signals, fs, start=0, output_dir=None, binaur
         else:
             filename = os.path.join(output_dir, 'microphone_signals.png')
         plt.savefig(filename)
-    else:
-        plt.show()
+    # else:
+    #     plt.show()
 
 
 def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_dB=None, SNR=None, output_dir=None, directivity=False, azimuth_deg=None):
@@ -209,8 +209,8 @@ def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_
     if output_dir:
         filename = os.path.join(output_dir, 'room_simulation.png')
         plt.savefig(filename)
-    else:
-        plt.show()
+    # else:
+    #     plt.show()
 
     # Determine zoomed-in region
     zoom_margin = 0.1 #meters
@@ -257,8 +257,8 @@ def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_
     if output_dir:
         filename = os.path.join(output_dir, 'room_simulation_zoom.png')
         plt.savefig(filename)
-    else:
-        plt.show()
+    # else:
+    #     plt.show()
 
 
 def generate_speaker_pairs(datapath, num_samples=None, num_interferers=1, max_total_samples=None):

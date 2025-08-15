@@ -120,7 +120,7 @@ def samples_by_gender_comb(df, output_dir):
     # plt.show()
 
 
-def main(dataset_dir, output_dir, simulation):
+def EDA_main(dataset_dir, output_dir, simulation):
     metadata = load_dataset(dataset_dir)
 
     # Convert metadata to pandas DataFrame
@@ -143,6 +143,6 @@ if __name__ == '__main__':
     dataset_dir = "MultichannelAudio.json"  # Replace with meta data .json file
     output_dir = "EDA_plots"
 
-    main(dataset_dir, output_dir, simulation='room')
+    EDA_main(dataset_dir, output_dir, simulation='room')
 
 

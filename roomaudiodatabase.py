@@ -103,14 +103,19 @@ class MultiChannelGenerator:
     def save_multi_channel_audio(self, filename, signals):
         """Saves a multi-channel audio"""
         for i, signal in enumerate(signals):
-            self.save_single_channel_audio(filename+f'_CH{i}', signal)
+            cropped_signal = self.crop_audio_length(signal)
+            self.save_single_channel_audio(filename+f'_CH{i}', cropped_signal)
 
     def save_binaural_audio(self, filename, signals):
         """Saves a binaural audio
             Expecting signals[0] to be the left ear and signals[1] to be the right"""
         if signals.shape[0] != 2:
             raise ValueError('Input to save_binaural_audio must be left and right ear signals')
-        sf.write(filename+'.wav', signals.T, self.sample_rate)
+        
+        cropped_signals = np.zeros((2, int(self.audio_length * self.sample_rate)))
+        for i, sig in enumerate(signals):
+            cropped_signals[i] = self.crop_audio_length(sig)
+        sf.write(filename+'.wav', cropped_signals.T, self.sample_rate)
 
     def play_audio(self, signal):
         '''
@@ -147,7 +152,7 @@ class MultiChannelGenerator:
 
         # Add target speaker with random azimuth location
         target_audio, target_sr = librosa.load(audio_files["target"], sr=self.sample_rate)
-        target_audio = self.crop_audio_length(target_audio)
+        # target_audio = self.crop_audio_length(target_audio)
         target_info = audio_files["target"].split('/')
         r_src, ph_src = 0.5, 90   # ph=0 is on the x+ axis, then pi increases counter clock wise
         target_position, _ = self.add_speaker(room, glasses_position, target_audio,
@@ -164,7 +169,7 @@ class MultiChannelGenerator:
         scaled_noise_sigs = []
         for n, spk in enumerate(audio_files["interferes"].keys()):
             interfering_audio, _ = librosa.load(audio_files["interferes"][spk], sr=self.sample_rate)
-            interfering_audio = self.crop_audio_length(interfering_audio) #think of adding audio augmentation
+            # interfering_audio = self.crop_audio_length(interfering_audio) #think of adding audio augmentation
             r_noise, ph_noise = random.choice([2.5, 3.5]), random.randrange(180, 361, 20)   # ph=0 is on the x+ axis, then pi increases counter clock wise
             noise_pos, scaled_noise_sig = self.add_speaker(room, glasses_position, target_audio,
                                                     [r_noise, ph_noise, 0], is_target=False, snr_db=snr,
@@ -281,7 +286,7 @@ class MultiChannelGenerator:
 
         # Add target speaker with random azimuth location
         target_audio, target_sr = librosa.load(audio_files["target"], sr=self.sample_rate)
-        target_audio = self.crop_audio_length(target_audio)
+        # target_audio = self.crop_audio_length(target_audio)
         #target_audio = target_audio * (0.95 / abs(target_audio).max())
 
         hrtf = MeasuredDirectivityFile(
@@ -313,7 +318,7 @@ class MultiChannelGenerator:
         # Add interfering speakers with random azimuth location
         for n, spk in enumerate(audio_files["interferes"].keys()):
             interfering_audio, interfering_sr = librosa.load(audio_files["interferes"][spk], sr=self.sample_rate)
-            interfering_audio = self.crop_audio_length(interfering_audio) #think of adding audio augmentation
+            # interfering_audio = self.crop_audio_length(interfering_audio) #think of adding audio augmentation
             r_noise, ph_noise = random.choice([2.5, 3.5]), random.randrange(180, 361,
                                                                             20)  # ph=0 is on the x+ axis, then pi increases counter clock wise
             noise_pos, noise_sig = self.add_speaker(room, glasses_position, target_audio,
