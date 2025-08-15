@@ -5,14 +5,14 @@ import soundfile as sf
 import pyroomacoustics as pra
 import random
 import librosa
-from tools import plot_room_2d, play_audio, plot_signal_at_microphones, get_gender_category
+from tools.tools import plot_room_2d, play_audio, plot_signal_at_microphones, get_gender_category, plot_stft
 import sounddevice as sd
 import matplotlib.pyplot as plt
 from pyroomacoustics.directivities import MeasuredDirectivityFile, Rotation3D
 
 
 class MultiChannelGenerator:
-    def __init__(self, sample_rate=16000, output_dir=None, clean_output_dir=None, simulation='room', verbose=False, verbose_outpur_dir=None):
+    def __init__(self, sample_rate=16000, output_dir=None, clean_output_dir=None, noise_output_dir=None, simulation='room', verbose=False, verbose_outpur_dir=None):
         self.sample_rate = sample_rate
         self.audio_length = 3   # sec
         self.output_dir = output_dir
@@ -21,6 +21,9 @@ class MultiChannelGenerator:
         self.clean_output_dir = clean_output_dir
         if self.clean_output_dir:
             os.makedirs(clean_output_dir, exist_ok=True)
+        self.noise_output_dir = noise_output_dir
+        if self.noise_output_dir:
+            os.makedirs(noise_output_dir, exist_ok=True)
         self.verbose = verbose
         self.verbose_outpur_dir = verbose_outpur_dir
         if self.verbose_outpur_dir:
@@ -124,7 +127,7 @@ class MultiChannelGenerator:
         sd.play(signal, self.sample_rate)
         sd.wait()  # Wait for playback to finish
 
-    def generate_multichannel_audio(self, room_dim, rt60_tgt, snr, audio_files, num_interfering_sources=1, with_DRR=False, save_audio=False):
+    def generate_multichannel_audio(self, room_dim, rt60_tgt, snr, audio_files, num_interfering_sources=1, with_DRR=False, save_audio=False, save_noise_audio=False):
         """
         Generates a multichannel audio with room size, RT60, and SNR condition with possible interfering sources.
 
@@ -158,13 +161,15 @@ class MultiChannelGenerator:
             print('Number of Interfering Sources:', num_interfering_sources)
 
         # Add interfering speakers with random azimuth location
+        scaled_noise_sigs = []
         for n, spk in enumerate(audio_files["interferes"].keys()):
-            interfering_audio, interfering_sr = librosa.load(audio_files["interferes"][spk], sr=self.sample_rate)
+            interfering_audio, _ = librosa.load(audio_files["interferes"][spk], sr=self.sample_rate)
             interfering_audio = self.crop_audio_length(interfering_audio) #think of adding audio augmentation
             r_noise, ph_noise = random.choice([2.5, 3.5]), random.randrange(180, 361, 20)   # ph=0 is on the x+ axis, then pi increases counter clock wise
-            noise_pos, noise_sig = self.add_speaker(room, glasses_position, target_audio,
+            noise_pos, scaled_noise_sig = self.add_speaker(room, glasses_position, target_audio,
                                                     [r_noise, ph_noise, 0], is_target=False, snr_db=snr,
                                                     interefering_audio=interfering_audio)
+            scaled_noise_sigs.append(scaled_noise_sig)
             if self.verbose:
                 print('Interfere:', audio_files["interferes"][spk], 'Position:', noise_pos)
             sources_position[n+1] = noise_pos
@@ -191,6 +196,8 @@ class MultiChannelGenerator:
             room_only_target.simulate()
             rir_only_target = room_only_target.rir[1][0]  # RIR for mic 0 and source 0
             signals_only_target = room_only_target.mic_array.signals
+            if self.verbose:
+                plot_stft(signal=signals_only_target[0], sr=self.sample_rate, output_dir=self.verbose_outpur_dir, signal_name='target')
 
             # Save to file
             if save_audio:
@@ -218,14 +225,34 @@ class MultiChannelGenerator:
 
             del room_only_target, signals_only_target, rir_only_target, rir_reverb, rir_direct
 
+        if save_noise_audio:
+            if self.noise_output_dir is None:
+                raise ValueError('A noise output directory has not been provided')
+
+            room_only_interfering = self.generate_room(room_dim, rt60_tgt)
+            self.add_microphones(room_only_interfering, glasses_position)
+            for n, spk in enumerate(audio_files["interferes"].keys()):
+                room_only_interfering.add_source(sources_position[n+1], signal=scaled_noise_sigs[n])
+          
+            room_only_interfering.simulate()
+            signals_only_interfering = room_only_interfering.mic_array.signals
+
+            filename = os.path.join(self.noise_output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
+            self.save_multi_channel_audio(filename, signals_only_interfering)
+            if self.verbose:
+                plot_stft(signal=signals_only_interfering[0], sr=self.sample_rate, output_dir=self.verbose_outpur_dir, signal_name='noise')
+
+            del room_only_interfering, signals_only_interfering
+
         rt60 = room.measure_rt60(plot=False) # measure the reverberation time, to show plot add plt.show() inside function
 
         if self.verbose:
             plot_room_2d(room, sources_position, mic_positions, sample_ID=sample_id, T60=round(rt60[0][0], 1),
-                         drr_dB=drr_db, output_dir=self.verbose_outpur_dir)
+                         drr_dB=drr_db, SNR=snr, output_dir=self.verbose_outpur_dir)
             print("The desired RT60 was {}, measured was {}".format(rt60_tgt, rt60[0][0]))
             print(f'DRR DB: {drr_db}')
             plot_signal_at_microphones(signals, self.sample_rate, output_dir=self.verbose_outpur_dir)
+            plot_stft(signal=signals[0], sr=self.sample_rate, output_dir=self.verbose_outpur_dir, signal_name='mixture')
 
         genders = get_gender_category(audio_files["target_id"], audio_files["interferer_ids"])
 

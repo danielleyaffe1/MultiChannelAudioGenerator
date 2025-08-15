@@ -1,11 +1,9 @@
-from tools import *
-from EDA import *
+from tools.tools import *
 from roomaudiodatabase import MultiChannelGenerator
 import json
 import random
 from tqdm import tqdm
 import numpy as np
-import math
 
 AV_DATA_FOLDER = 'cleandata'
 A_DATA_FOLDER = 'cleanaudiodata'
@@ -20,12 +18,13 @@ if __name__ == "__main__":
     snr_values = [-10, -5, 0, 5]      # Different SNR levels
     simulation = 'room'                    # Choose simulation type between 'room' or 'free_field'
     noise = 'babble'                     # Choose noise type between 'interfere' or 'babble'
-    num_pairs_per_spk = 20                # None = create pairs for all target files (max possible)
-    max_total_samples = 200                  # Maximum data samples
-    save_multichannel = True
+    num_pairs_per_spk = 1                # None = create pairs for all target files (max possible)
+    max_total_samples = 1                  # Maximum data samples
+    save_multichannel = True            # Save multi channel mixed audio and clean seperately
+    save_noise_audio = True             # Save multi channel noise audio - for IRM calculaiton...
     save_binaural = False
     verbose = False
-    EDA = True
+    EDA = False
 
     if simulation == 'room':
         room_sizes = [[7.0, 8.0, 3.0], [10.0, 8.0, 3.0], [12.0, 9.0, 3.0]]
@@ -47,14 +46,16 @@ if __name__ == "__main__":
     else:
         raise ValueError('Invalid noise request. Please choose a noise type: interfere or babble')
 
-    output_dir = sim_name+'_'+noise_name
+    output_dir = 'test_'+sim_name+'_'+noise_name
     clean_output_dir = output_dir + "_clean"
+    noise_output_dir = output_dir + "_noise"
 
     # Create list of audio pairs/ combination for simulations.
     speaker_pairs = generate_speaker_pairs(datapath=A_DATA_FOLDER, num_samples=num_pairs_per_spk, num_interferers=num_interfering_sources, max_total_samples=max_total_samples)
     dataset_generator = MultiChannelGenerator(sample_rate=16000,
                                               output_dir=output_dir,
                                               clean_output_dir=clean_output_dir,
+                                              noise_output_dir=noise_output_dir,
                                               simulation=simulation,
                                               verbose=verbose)
 
@@ -78,7 +79,8 @@ if __name__ == "__main__":
                                                                              audio_files=audio_files,
                                                                              num_interfering_sources=num_interfering_sources,
                                                                              with_DRR=True,
-                                                                             save_audio=save_multichannel)
+                                                                             save_audio=save_multichannel,
+                                                                             save_noise_audio=save_noise_audio)
             if save_binaural:
                 dataset_generator.generate_binaural_audio(room_dim, rt60_tgt, snr, audio_files, num_interfering_sources,
                                                     azimuth_deg=90.0, save_audio=save_binaural)
@@ -92,7 +94,7 @@ if __name__ == "__main__":
             pbar.update(1)
             idx += 1
 
-    print(f"Dataset generation complete! {idx} samples processed. Save status: Multi channel:{save_multichannel}, Binaural:{save_binaural}")
+    print(f"Dataset generation complete! {idx} samples processed. Save status: Multi channel:{save_multichannel}, Multi Channel Noise:{save_noise_audio}, Binaural:{save_binaural}")
 
     # EDA
     if EDA:

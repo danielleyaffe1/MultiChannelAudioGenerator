@@ -24,7 +24,7 @@ def plot_time_domain(signal, sr):
     plt.show()
 
 
-def plot_stft(signal, sr):
+def plot_stft(signal, sr, output_dir=None, signal_name=None):
 
     # Compute the STFT of the signal
     D = librosa.stft(signal)
@@ -33,14 +33,17 @@ def plot_stft(signal, sr):
 
     # Create a plot for the STFT (spectrogram)
     plt.figure(figsize=(10, 6))
-    img = librosa.display.specshow(D_db, x_axis='time', y_axis='log', sr=sr)
-    plt.title("STFT Magnitude (Log Frequency Scale)")
+    img = librosa.display.specshow(D_db, x_axis='time', y_axis='hz', sr=sr)
+    plt.title("STFT Magnitude")
     plt.xlabel("Time (seconds)")
     plt.ylabel("Frequency (Hz)")
     plt.colorbar(format="%+2.0f dB")
     plt.grid(True)
     plt.tight_layout()
-    plt.show()
+    if output_dir:
+        filename = os.path.join(output_dir, signal_name+'_STFT.png')
+        plt.savefig(filename)
+    #plt.show()
 
 
 def check_reverberation(signal, fs):
@@ -146,7 +149,7 @@ def plot_signal_at_microphones(mic_signals, fs, start=0, output_dir=None, binaur
         plt.show()
 
 
-def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_dB=None, output_dir=None, directivity=False, azimuth_deg=None):
+def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_dB=None, SNR=None, output_dir=None, directivity=False, azimuth_deg=None):
     """
     Plots a 2D representation of the room with the speaker and microphone positions.
 
@@ -156,6 +159,7 @@ def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_
     - mic_positions: np.array of shape (2, N) representing microphone positions (x, y)
     - sample_ID: identifier for the sample
     - T60: RT60 value (optional)
+    - SNR: SNR (optional)
     - drr_dB: Direct-to-reverberant ratio in dB (optional)
     - output_dir: directory to save the plot
     - directivity: bool, whether to draw directivity arrows
@@ -194,6 +198,8 @@ def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_
     title = f"Room Simulation: {sample_ID}\n Room Size: {room.shoebox_dim[0]}m x {room.shoebox_dim[1]}m"
     if T60 is not None:
         title += f" | RT60: {T60}s"
+    if SNR is not None:
+        title += f" | SNR: {SNR} dB"
     if drr_dB is not None:
         title += f" | DRR: {drr_dB:.2f} dB"
     ax.set_title(title)
@@ -239,6 +245,8 @@ def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_
     title = f"Zoomed-in: Speaker & Microphones for Sample ID {sample_ID}\n Room Size: {room.shoebox_dim[0]}m x {room.shoebox_dim[1]}m"
     if T60 is not None:
         title += f" | RT60: {T60}s"
+    if SNR is not None:
+        title += f" | SNR: {SNR} dB"
     if drr_dB is not None:
         title += f" | DRR: {drr_dB:.2f} dB"
     ax2.set_title(title)
