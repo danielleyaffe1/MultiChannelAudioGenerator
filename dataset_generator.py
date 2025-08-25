@@ -19,8 +19,8 @@ if __name__ == "__main__":
     snr_values = [-10, -5, 0, 5]      # Different SNR levels
     simulation = 'room'                    # Choose simulation type between 'room' or 'free_field'
     noise = 'babble'                     # Choose noise type between 'interfere' or 'babble'
-    num_pairs_per_spk = None                # None = create pairs for all target files (max possible)
-    max_total_samples = None                  # Maximum data samples
+    num_pairs_per_spk = 5                # None = create pairs for all target files (max possible)
+    max_total_samples = 100                  # Maximum data samples
     save_multichannel = True            # Save multi channel mixed audio and clean seperately
     save_noise_audio = True             # Save multi channel noise audio - for IRM calculaiton...
     save_binaural = False
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     else:
         raise ValueError('Invalid noise request. Please choose a noise type: interfere or babble')
 
-    output_dir = 'tmp_'+sim_name+'_'+noise_name
+    output_dir = sim_name+'_'+noise_name
     clean_output_dir = output_dir + "_clean"
     noise_output_dir = output_dir + "_noise"
 
