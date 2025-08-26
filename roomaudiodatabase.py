@@ -191,15 +191,15 @@ class MultiChannelGenerator:
         if save_audio:
             if self.clean_output_dir is None:
                 raise ValueError('A clean output directory has not been provided')
-            filename = os.path.join(self.clean_output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
-            self.save_multi_channel_audio(filename, signals_only_target)
+            filename_clean = os.path.join(self.clean_output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
+            self.save_multi_channel_audio(filename_clean, signals_only_target)
 
         # Saving data: noise data
         if save_noise_audio:
             if self.noise_output_dir is None:
                 raise ValueError('A noise output directory has not been provided')
-            filename = os.path.join(self.noise_output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
-            self.save_multi_channel_audio(filename, alpha*signals_only_interfering)
+            filename_noise = os.path.join(self.noise_output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
+            self.save_multi_channel_audio(filename_noise, alpha*signals_only_interfering)
 
         drr_db = None
         if with_DRR:
