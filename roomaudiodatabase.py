@@ -67,14 +67,26 @@ class MultiChannelGenerator:
         """Scales noise to achieve target SNR."""
         clean_power = np.mean(clean_signal ** 2)
         noise_power = np.mean(noise_signal ** 2)
-        snr_linear = 10 ** (snr_db / 10)
+        desired_noise_pow = clean_power / (10.0 ** (snr_db / 10.0))
+        g = np.sqrt(desired_noise_pow / noise_power)
         
         if find_alpha:
-            return np.sqrt(clean_power / (snr_linear * noise_power))
+            return g
         
-        return noise_signal * np.sqrt(clean_power / (snr_linear * noise_power))
+        return g * noise_signal
 
-    def add_speaker(self, room, glasses_position, audio, relative_position=[1.5, 90, 0], need_scaling=False, snr_db=None, interefering_audio=None):
+    def add_random_delay(self, signal, max_delay_ms=500):
+            
+        max_delay_samples = int(self.sample_rate * max_delay_ms / 1000.0)   # Convert delay from ms to samples
+        step = int(self.sample_rate * 50 / 1000.0)  
+        possible_delays = np.arange(0, max_delay_samples + 1, step)
+        delay_samples = np.random.choice(possible_delays)  
+        delayed_signal = np.pad(signal, (delay_samples, 0), mode='constant')
+
+        return delayed_signal, delay_samples
+
+
+    def add_speaker(self, room, glasses_position, audio, relative_position=[1.5, 90, 0], delay=False, snr_db=None, interefering_audio=None):
         """Adds a speaker at a relative position to the listener."""
         r, phi, _ = relative_position
         position = glasses_position + np.array([r * np.cos(phi * np.pi / 180), r * np.sin(phi * np.pi / 180), 0])
@@ -82,13 +94,27 @@ class MultiChannelGenerator:
         x, y = chk_speaker_position_in_room(position, Lx, Ly, glasses_position)
         position = np.array([x, y, position[2]])
 
-        if not need_scaling:
+        if not delay and snr_db is None:
             room.add_source(position, signal=audio)
             return position, audio
-        else:
+        
+        if snr_db:
+            if interefering_audio is None:
+                raise ValueError('For scaling interfering audio by snr_db both audio and interefering_audio must be provided')
+            
             scaled_noise = self.scale_noise(interefering_audio, audio, snr_db)
-            room.add_source(position, signal=scaled_noise)
-            return position, scaled_noise
+            audio = scaled_noise
+            
+        if delay:            
+            delayed_audio, delay_samples = self.add_random_delay(audio)
+            audio = delayed_audio
+            if self.verbose:
+                print(f'Added random delay of {delay_samples/self.sample_rate*1000:.1f} ms to interfere signal')
+            
+        room.add_source(position, signal=audio)
+        
+        return position, audio
+            
 
     def crop_audio_length(self, audio):
         segment_len = int(self.audio_length * self.sample_rate)
@@ -143,13 +169,17 @@ class MultiChannelGenerator:
         target_audio, target_sr = librosa.load(audio_files["target"], sr=self.sample_rate)
         target_info = audio_files["target"].split('/')
         r_src, ph_src = 0.5, 90   # ph=0 is on the x+ axis, then pi increases counter clock wise
-        target_position, _ = self.add_speaker(room_only_target, glasses_position, target_audio,[r_src, ph_src, 0], need_scaling=False)
+        target_position, _ = self.add_speaker(room_only_target, glasses_position, target_audio,[r_src, ph_src, 0], delay=False)
         
         source_positions[0] = target_position
 
         room_only_target.simulate()
         rir_only_target = room_only_target.rir[1][0]  # RIR for mic 0 and source 0 (later used for DRR)
         signals_only_target = room_only_target.mic_array.signals
+        peak = np.max(np.abs(signals_only_target))
+        if peak > 0:
+            # scale so peak <= 1.0 (or you can choose RMS normalization)
+            signals_only_target = signals_only_target / max(1.0, peak)
         
         
         # Room simulation with only interfers/ noise speakers (for SNR scaling and saving noise data)
@@ -164,7 +194,7 @@ class MultiChannelGenerator:
             interfering_audio, _ = librosa.load(audio_files["interferes"][spk], sr=self.sample_rate)
             # interfering_audio = self.crop_audio_length(interfering_audio) #think of adding audio augmentation
             r_noise, ph_noise = random.choice([2.5, 3.5]), random.randrange(180, 361, 20)   # ph=0 is on the x+ axis, then pi increases counter clock wise
-            noise_pos, _ = self.add_speaker(room_only_interfering, glasses_position, interfering_audio,[r_noise, ph_noise, 0], need_scaling=False)
+            noise_pos, _ = self.add_speaker(room_only_interfering, glasses_position, interfering_audio,[r_noise, ph_noise, 0], delay=True)
             source_positions[n+1] = noise_pos
             
             if self.verbose:
@@ -172,10 +202,24 @@ class MultiChannelGenerator:
             
         room_only_interfering.simulate()
         signals_only_interfering = room_only_interfering.mic_array.signals
+        peak = np.max(np.abs(signals_only_interfering))
+        if peak > 0:
+            # scale so peak <= 1.0 (or you can choose RMS normalization)
+            signals_only_interfering = signals_only_interfering / max(1.0, peak)
 
         # Simulate multi-channel signals with SNR
-        alpha = self.scale_noise(signals_only_interfering[0], signals_only_target[0], snr, find_alpha=True) #without loss of generalization compute SNR according to channel 0
-        signals = signals_only_target[:,:int(self.audio_length * self.sample_rate)] + alpha*signals_only_interfering[:,:int(self.audio_length * self.sample_rate)]
+        signals_only_target = signals_only_target[:,:int(self.audio_length * self.sample_rate)]
+        signals_only_interfering = signals_only_interfering[:,:int(self.audio_length * self.sample_rate)]
+        g = self.scale_noise(signals_only_interfering[0], signals_only_target[0], snr, find_alpha=True) #without loss of generalization compute SNR according to channel 0
+        
+        if np.abs((10 * np.log10(np.mean(signals_only_target[0]**2) / np.mean((g*signals_only_interfering[0])**2)))-snr) > 0.1:
+            raise ValueError('SNR calculation error, check scale_noise function')   
+        
+        signals = signals_only_target + g*signals_only_interfering
+        peak = np.max(np.abs(signals))
+        if peak > 0:
+            # scale so peak <= 1.0 (or you can choose RMS normalization)
+            signals = signals / max(1.0, peak)
 
         # Saving data: mixture data
         filename = 'None'
@@ -199,7 +243,7 @@ class MultiChannelGenerator:
             if self.noise_output_dir is None:
                 raise ValueError('A noise output directory has not been provided')
             filename_noise = os.path.join(self.noise_output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
-            self.save_multi_channel_audio(filename_noise, alpha*signals_only_interfering)
+            self.save_multi_channel_audio(filename_noise, g*signals_only_interfering)
 
         drr_db = None
         if with_DRR:
