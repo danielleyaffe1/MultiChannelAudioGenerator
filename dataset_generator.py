@@ -16,7 +16,7 @@ if __name__ == "__main__":
     # print(f"Done extracting audio from mpg files in {AV_DATA_FOLDER}. Saved in {A_DATA_FOLDER}")
 
     # Define dataset parameters
-    snr_values = [-10, -5, 0, 5]      # Different SNR levels
+    snr_values = [-10, -8, -5, 0, 5]      # Different SNR levels
     simulation = 'room'                    # Choose simulation type between 'room' or 'free_field'
     noise = 'babble'                     # Choose noise type between 'interfere' or 'babble'
     num_pairs_per_spk = None                # None = create pairs for all target files (max possible)
