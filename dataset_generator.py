@@ -42,7 +42,7 @@ if __name__ == "__main__":
         num_interfering_sources = 1  # Number of interferes, choose >4 for babble noise
         noise_name = str(num_interfering_sources)+'Inter'
     elif noise == 'babble':
-        num_interfering_sources = 4  # Number of interferes, choose >3 for babble noise
+        num_interfering_sources = 2  # Number of interferes, choose >3 for babble noise
         noise_name = 'Babble'
     else:
         raise ValueError('Invalid noise request. Please choose a noise type: interfere or babble')
@@ -65,35 +65,40 @@ if __name__ == "__main__":
 
     idx = 0
     metadata = []
-    with tqdm(total=len(speaker_pairs), desc="Generating dataset", unit="sample") as pbar:
-        while idx < len(speaker_pairs):
-            snr, room_dim, rt60_tgt = random.choice(snr_values), random.choice(room_sizes), random.choice(rt60_values)
+    with open('log_reverb.log', 'w') as log_file:
+        with tqdm(total=len(speaker_pairs), desc="Generating dataset", unit="sample") as pbar:
+            while idx < len(speaker_pairs):
+                snr, room_dim, rt60_tgt = random.choice(snr_values), random.choice(room_sizes), random.choice(rt60_values)
 
-            audio_files = speaker_pairs[indexes[idx]]
-            if idx==len(speaker_pairs)-1:
-                dataset_generator.verbose = True
-                dataset_generator.verbose_outpur_dir = output_dir+'_plots'
-                os.makedirs(output_dir+'_plots', exist_ok=True)
-            sample_meta_data = dataset_generator.generate_multichannel_audio(room_dim=room_dim,
-                                                                             rt60_tgt=rt60_tgt,
-                                                                             snr=snr,
-                                                                             audio_files=audio_files,
-                                                                             num_interfering_sources=num_interfering_sources,
-                                                                             with_DRR=True,
-                                                                             save_audio=save_multichannel,
-                                                                             save_noise_audio=save_noise_audio)
-            if save_binaural:
-                dataset_generator.generate_binaural_audio(room_dim, rt60_tgt, snr, audio_files, num_interfering_sources,
-                                                    azimuth_deg=90.0, save_audio=save_binaural)
-            if save_multichannel:
-                with open(f"{output_dir}.json", "a") as f:
-                    json.dump(sample_meta_data, f)  # Dump each dictionary separately
-                    f.write("\n")  # Add a newline after each JSON object
-            if verbose:
-                print(sample_meta_data)
-            metadata.append(sample_meta_data)
-            pbar.update(1)
-            idx += 1
+                audio_files = speaker_pairs[indexes[idx]]
+                if idx==len(speaker_pairs)-1:
+                    dataset_generator.verbose = True
+                    dataset_generator.verbose_outpur_dir = output_dir+'_plots'
+                    os.makedirs(output_dir+'_plots', exist_ok=True)
+                try:
+                    sample_meta_data = dataset_generator.generate_multichannel_audio(room_dim=room_dim,
+                                                                                     rt60_tgt=rt60_tgt,
+                                                                                     snr=snr,
+                                                                                     audio_files=audio_files,
+                                                                                     num_interfering_sources=num_interfering_sources,
+                                                                                     with_DRR=True,
+                                                                                     save_audio=save_multichannel,
+                                                                                     save_noise_audio=save_noise_audio)
+                    if save_binaural:
+                        dataset_generator.generate_binaural_audio(room_dim, rt60_tgt, snr, audio_files, num_interfering_sources,
+                                                            azimuth_deg=90.0, save_audio=save_binaural)
+                    if save_multichannel:
+                        with open(f"{output_dir}.json", "a") as f:
+                            json.dump(sample_meta_data, f)  # Dump each dictionary separately
+                            f.write("\n")  # Add a newline after each JSON object
+                    if verbose:
+                        print(sample_meta_data)
+                except Exception as e:
+                    log_file.write("{ Error while processing: " + audio_files + '\n' + str(e) + '}\n')
+
+                metadata.append(sample_meta_data)
+                pbar.update(1)
+                idx += 1
 
     print(f"Dataset generation complete! {idx} samples processed. Save status: Multi channel:{save_multichannel}, Multi Channel Noise:{save_noise_audio}, Binaural:{save_binaural}")
 
