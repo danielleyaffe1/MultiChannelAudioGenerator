@@ -95,6 +95,7 @@ if __name__ == "__main__":
                         print(sample_meta_data)
                 except Exception as e:
                     log_file.write("{ Error while processing: " + audio_files + '\n' + str(e) + '}\n')
+                    print('Error while processing: ' + audio_files + '\n' + str(e))
 
                 metadata.append(sample_meta_data)
                 pbar.update(1)
