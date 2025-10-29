@@ -2,11 +2,15 @@
 .venv/
 venv/
 env/
+.vscode/
 __pycache__/
 cleanaudiodata/
 cleandata/
 Reverb_*
 FreeField_*
+mouth_roi/
+proc_mouth_roi/
 *.db
 .DS_Store
 .idea/
+test_Reverb_*
