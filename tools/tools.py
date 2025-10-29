@@ -116,6 +116,9 @@ def extract_audio(av_folder, audioonly_folder):
             if not os.path.exists(audio_path):
                 audio.write_audiofile(audio_path, fps=sample_rate, codec="pcm_s16le", logger=None)
 
+            video.close()
+            audio.close()
+
         if av_file_count == len(os.listdir(os.path.join(av_folder, speaker_dir))):
             print(f'All .mpg files from speaker {speaker_dir} have been saved as .wav files')
 
