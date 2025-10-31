@@ -27,12 +27,26 @@ class MultiChannelGenerator:
         self.verbose_outpur_dir = verbose_outpur_dir
         if self.verbose_outpur_dir:
             os.makedirs(verbose_outpur_dir, exist_ok=True)
-        self.microphone_array = np.array([
-            [-0.082, -0.029, -0.005],  # Left temple
-            [0.001, 0.030, -0.001],  # Above nose
-            [0.077, 0.011, -0.002],  # Right temple
-            [0.083, -0.060,-0.005],  # Inner right temple
+        
+        # Microphone coordinates in meters (Aria Glasses V1)
+        # Source: https://www.chimechallenge.org/challenges/chime8/task3/data
+        self.microphone_array = np.array([ #FIXME: check x,y axis matching the coordinates system in pyroomacoustics
+            [0.0476, 0.0995, 0.0068],  # Lower-lens right
+            [-0.0074, 0.1059,  0.0507],  # Nose bridge
+            [-0.0449, 0.0995,  0.0076],  # Lower-lens left
+            [-0.0641, 0.0928,  0.0512],  # Front left
+            [0.0566, 0.0993, 0.0522],  # Front right
+            # [-0.0042, -0.0845, 0.0335], # Rear right (binaural)
+            # [-0.0048,  0.0775, 0.0349], # Rear left (binaural)
         ])
+
+        # 
+        # self.microphone_array = np.array([
+        #     [-0.082, -0.029, -0.005],  # Left temple
+        #     [0.001, 0.030, -0.001],  # Above nose
+        #     [0.077, 0.011, -0.002],  # Right temple
+        #     [0.083, -0.060,-0.005],  # Inner right temple
+        # ])
         self.simulation_type = simulation
 
     def generate_room(self, room_dim, rt60_tgt, only_direct=False):
@@ -86,7 +100,7 @@ class MultiChannelGenerator:
         return delayed_signal, delay_samples
 
 
-    def add_speaker(self, room, glasses_position, audio, relative_position=[1.5, 90, 0], delay=False, snr_db=None, interefering_audio=None):
+    def add_speaker(self, room, glasses_position, audio, relative_position, delay=False, snr_db=None, interefering_audio=None):
         """Adds a speaker at a relative position to the listener."""
         r, phi, _ = relative_position
         position = glasses_position + np.array([r * np.cos(phi * np.pi / 180), r * np.sin(phi * np.pi / 180), 0])
@@ -131,9 +145,11 @@ class MultiChannelGenerator:
 
     def save_multi_channel_audio(self, filename, signals):
         """Saves a multi-channel audio"""
+        os.makedirs(filename, exist_ok=True)
         for i, signal in enumerate(signals):
             cropped_signal = self.crop_audio_length(signal)
-            self.save_single_channel_audio(filename+f'_CH{i}', cropped_signal)
+            # self.save_single_channel_audio(filename+f'_CH{i}', cropped_signal)
+            self.save_single_channel_audio(os.path.join(filename,f'CH{i}'), cropped_signal)
 
     def save_binaural_audio(self, filename, signals):
         """Saves a binaural audio
@@ -159,15 +175,15 @@ class MultiChannelGenerator:
         """
 
         source_positions = np.zeros((num_interfering_sources + 1, len(room_dim)))
-        glasses_position = [room_dim[0] / 2, room_dim[1] / 2, 1.5] # michrophones set in the middle of the room
+        glasses_position = [room_dim[0] / 3, room_dim[1] / 2, 1.5] # michrophones set in the middle of the room
         
         # Room simulation with only the target speaker (For SNR scaling and saving target data)
         room_only_target = self.generate_room(room_dim, rt60_tgt)
         mic_positions = self.add_microphones(room_only_target, glasses_position)
         
         # Add target speaker with random azimuth location
-        target_audio, target_sr = librosa.load(audio_files["target"], sr=self.sample_rate)
-        target_info = audio_files["target"].split('/')
+        target_audio, target_sr = librosa.load(audio_files["target_file"], sr=self.sample_rate)
+        # target_info = audio_files["target"].split('/')
         r_src, ph_src = 0.5, 90   # ph=0 is on the x+ axis, then pi increases counter clock wise
         target_position, _ = self.add_speaker(room_only_target, glasses_position, target_audio,[r_src, ph_src, 0], delay=False)
         
@@ -194,11 +210,11 @@ class MultiChannelGenerator:
             interfering_audio, _ = librosa.load(audio_files["interferes"][spk], sr=self.sample_rate)
             # interfering_audio = self.crop_audio_length(interfering_audio) #think of adding audio augmentation
             r_noise, ph_noise = random.choice([2.5, 3.5]), random.randrange(180, 361, 20)   # ph=0 is on the x+ axis, then pi increases counter clock wise
-            noise_pos, _ = self.add_speaker(room_only_interfering, glasses_position, interfering_audio,[r_noise, ph_noise, 0], delay=True)
+            noise_pos, _ = self.add_speaker(room_only_interfering, glasses_position, interfering_audio,[r_noise, ph_noise, 0], delay=False)
             source_positions[n+1] = noise_pos
             
-            if self.verbose:
-                print('Interfere:', audio_files["interferes"][spk], 'Position:', noise_pos)
+            # if self.verbose:
+            #     print('Interfere:', audio_files["interferes"][spk], 'Position:', noise_pos)
             
         room_only_interfering.simulate()
         signals_only_interfering = room_only_interfering.mic_array.signals
@@ -224,10 +240,12 @@ class MultiChannelGenerator:
         # Saving data: mixture data
         filename = 'None'
         sample_id = audio_files["ID"]
-        sentence = target_info[2].split('.')[0]
+        target_id = audio_files["target_id"]
+        sentence = audio_files["target_sentence"] #target_info[2].split('.')[0]
         # Save to file
         if self.output_dir:
-            filename = os.path.join(self.output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
+            #filename = os.path.join(self.output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
+            filename = os.path.join(self.output_dir, target_id, sentence)
             if save_audio:
                 self.save_multi_channel_audio(filename, signals)
 
@@ -235,14 +253,16 @@ class MultiChannelGenerator:
         if save_audio:
             if self.clean_output_dir is None:
                 raise ValueError('A clean output directory has not been provided')
-            filename_clean = os.path.join(self.clean_output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
+            # filename_clean = os.path.join(self.clean_output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
+            filename_clean = os.path.join(self.clean_output_dir, target_id, sentence)
             self.save_multi_channel_audio(filename_clean, signals_only_target)
 
         # Saving data: noise data
         if save_noise_audio:
             if self.noise_output_dir is None:
                 raise ValueError('A noise output directory has not been provided')
-            filename_noise = os.path.join(self.noise_output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
+            # filename_noise = os.path.join(self.noise_output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
+            filename_noise = os.path.join(self.noise_output_dir, target_id, sentence)
             self.save_multi_channel_audio(filename_noise, g*signals_only_interfering)
 
         drr_db = None
@@ -266,7 +286,9 @@ class MultiChannelGenerator:
         rt60 = room_only_target.measure_rt60(plot=False) # measure the reverberation time, to show plot add plt.show() inside function
 
         if self.verbose:
-            print('Target:', audio_files["target"], 'Position:', target_position)
+            print("===================================================")
+            print("Simultation data and plots for sample_id:", sample_id)
+            print('Target:', audio_files["target_file"], 'Position:', target_position)
             print('Number of Interfering Sources:', num_interfering_sources)
             plot_room_2d(room_only_target, source_positions, mic_positions, sample_ID=sample_id, T60=round(rt60[0][0], 1),
                          drr_dB=drr_db, SNR=snr, output_dir=self.verbose_outpur_dir)
@@ -276,11 +298,13 @@ class MultiChannelGenerator:
             plot_stft(signal=signals[0], sr=self.sample_rate, output_dir=self.verbose_outpur_dir, signal_name='mixture')
             plot_stft(signal=signals_only_target[0], sr=self.sample_rate, output_dir=self.verbose_outpur_dir, signal_name='target')
             plot_stft(signal=signals_only_interfering[0], sr=self.sample_rate, output_dir=self.verbose_outpur_dir, signal_name='noise')
+            print("===================================================")
 
-        genders = get_gender_category(audio_files["target_id"], audio_files["interferer_ids"])
+        genders = get_gender_category(target_id, audio_files["interferer_ids"])
 
-        return {"sample_id": sample_id,
-                "target": audio_files["target"],
+        return {"target": target_id,
+                "sentence": sentence,
+                "target_file": audio_files["target_file"],
                 "target_position": [round(x, 3) for x in target_position],
                 "interferes": audio_files["interferes"],
                 "interference_positions": [[round(x, 3) for x in pos] for pos in source_positions[1:]],
@@ -290,7 +314,8 @@ class MultiChannelGenerator:
                 "DRR": float(round(drr_db, 3)),
                 "num_channels": len(self.microphone_array),
                 "gender": genders,
-                "file": filename
+                "file": filename,
+                "sample_id": sample_id
                 }
 
     def generate_binaural_audio(self, room_dim, rt60_tgt, snr, audio_files, num_interfering_sources=1,
@@ -419,8 +444,7 @@ def chk_speaker_position_in_room(position, Lx, Ly, glasses_position):
         # Compute and print the radius (distance from center)
         radius = np.sqrt((x - gx) ** 2 + (y - gy) ** 2)
         if radius < 2.5:
-            print(f"\nSpeaker at {position} must be ≥ 1 m from all walls, room is {Lx}x{Ly}")
-            print(f"Fixing Position...Speaker new radial distance from Mics: {radius:.2f} meters")
+            print(f"Speaker at {position} must be ≥ 1 m from all walls, room is {Lx}x{Ly}. Fixing Position...Speaker new radial distance from Mics: {radius:.2f} meters, new position: ({x:.2f}, {y:.2f})")
 
     return x, y
 

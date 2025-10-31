@@ -128,7 +128,7 @@ def plot_signal_at_microphones(mic_signals, fs, start=0, output_dir=None, binaur
     plt.figure(figsize=(15, 10))
     step_size = 0.2  # X-axis tick interval
     for i in range(mic_signals.shape[0]):
-        plt.subplot(4, 1, i + 1)
+        plt.subplot(5, 1, i + 1)
         end = len(mic_signals[i])
         time_axis = np.arange(start, end) / fs  # Time in seconds
         mic_signal = mic_signals[i, start:end]
@@ -239,7 +239,8 @@ def plot_room_2d(room, source_position, mic_positions, sample_ID, T60=None, drr_
             ax2.scatter(mic_positions[0][0], mic_positions[1][0], marker='*', s=15, label=labels[i])
 
     else:
-        labels = ['Left temple', 'Above nose', 'Right temple', 'Inner right temple']
+        labels = ['Lower-lens right', 'Nose bridge','Lower-lens left','Front left','Front right'] #'Rear right (binaural)', 'Rear left (binaural)'
+        # labels = ['Left temple', 'Above nose', 'Right temple', 'Inner right temple']
         for i, label in enumerate(labels):
             ax2.scatter(mic_positions[0][i], mic_positions[1][i], marker='*', s=15, label=labels[i])
 
@@ -302,10 +303,14 @@ def generate_speaker_pairs(datapath, num_samples=None, num_interferers=1, max_to
             # Select sentences for interferes
             interferer_sentences = {spk: os.path.join(datapath, spk, random.choice(audio_files[spk])) for spk in interferes}
             
+            target_file = os.path.join(datapath, target_speaker, target_sentence)
+            target_sentence = target_sentence.replace('.wav','')
+
             speaker_pairs.append({
                 "ID": sample_id,
-                "target": os.path.join(datapath, target_speaker, target_sentence),
+                "target_file": target_file,
                 "target_id": target_speaker,
+                "target_sentence": target_sentence,
                 "interferes": interferer_sentences,
                 "interferer_ids": interferes
             })

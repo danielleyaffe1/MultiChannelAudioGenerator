@@ -25,7 +25,7 @@ def gender_distribution(df, output_dir):
     male_id = ['s1', 's2', 's3', 's5', 's6', 's8', 's9', 's10', 's12', 's13', 's14', 's17', 's19', 's26', 's27', 's28', 's30', 's32']
     # Simple method: Check the speaker ID in the filename (e.g., s1 for male, s34 for female, etc.)
     for target in df['target']:
-        speaker_id = target.split('/')[1]  # Assuming the file path is structured like "s1/..."
+        speaker_id = target  # Assuming the file path is structured like "s1/..."
         if speaker_id in male_id:
             gender_dict['male'] += 1
         else:
@@ -89,7 +89,7 @@ def snr_distribution(df, output_dir):
 
 # 5. Number of samples per speaker (Bar plot)
 def samples_per_speaker(df,output_dir):
-    speaker_ids = df['target'].apply(lambda x: x.split('/')[1])  # Extract speaker ID from file path
+    speaker_ids = df['target']  # Extract speaker ID from file path
     speaker_counts = speaker_ids.value_counts()
 
     # Plot number of samples per speaker as bar plot
