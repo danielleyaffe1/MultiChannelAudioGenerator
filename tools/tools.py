@@ -2,13 +2,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import correlate
 import librosa
-import sounddevice as sd
+# import sounddevice as sd
 import pygame as pg
 from moviepy.editor import VideoFileClip
 import os
 import random
 pg.init()
 pg.display.set_caption('MoviePy')
+import json
+
+PARENT_FOLDER = '/gpfs0/bgu-br/users/yaffedan/MultiChannelAudioGenerater'
+
 
 
 def plot_time_domain(signal, sr):
@@ -318,6 +322,10 @@ def generate_speaker_pairs(datapath, num_samples=None, num_interferers=1, max_to
             if (max_total_samples is not None) and (sample_id == max_total_samples):
                 return speaker_pairs
 
+    pairs_path = os.path.join(PARENT_FOLDER, "speaker_pairs.json")
+    with open(pairs_path, "w") as f:
+        json.dump(speaker_pairs, f, indent=2)
+    print(f"Saved {len(speaker_pairs)} speaker pairs to {pairs_path}")
     return speaker_pairs
 
 
