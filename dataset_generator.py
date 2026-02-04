@@ -19,13 +19,14 @@ if __name__ == "__main__":
     # print(f"Done extracting audio from mpg files in {AV_DATA_FOLDER}. Saved in {A_DATA_FOLDER}")
 
     # Define dataset parameters
-    snr_values = [-10, -8, -5, 0, 5]      # Different SNR levels
+    snr_values = [-20, -15, -10, -5, 0, 5]      # Different SNR levels
     simulation = 'room'                    # Choose simulation type between 'room' or 'free_field'
     noise = 'babble'                     # Choose noise type between 'interfere' or 'babble'
     num_pairs_per_spk = None                # None = create pairs for all target files (max possible)
     max_total_samples = None                  # Maximum data samples
     save_multichannel = True            # Save multi channel mixed audio and clean seperately
     save_noise_audio = True             # Save multi channel noise audio - for IRM calculaiton...
+    save_direct_audio = True             # Save multi channel direct target audio - for STOI calculaiton...
     save_binaural = False
     verbose = False
     EDA = True
@@ -46,13 +47,14 @@ if __name__ == "__main__":
         noise_name = str(num_interfering_sources)+'Inter'
     elif noise == 'babble':
         num_interfering_sources = 3  # Number of interferes, choose >3 for babble noise
-        noise_name = 'Babble'
+        noise_name = 'Babble2'
     else:
         raise ValueError('Invalid noise request. Please choose a noise type: interfere or babble')
 
     output_dir = os.path.join(PARENT_FOLDER, sim_name+'_'+noise_name, 'dataset')
     clean_output_dir = output_dir+'_clean'
     noise_output_dir = output_dir+'_noise'
+    direct_output_dir = output_dir+'_direct' # For direct (target only) path audio
 
 
 
@@ -70,17 +72,19 @@ if __name__ == "__main__":
 
         sample_ids = set()  # use a set for quick membership checks
 
-        with open(f"{output_dir}.json", "r") as f:
-            for line in f:
-                if line.strip():  # skip empty lines
-                    entry = json.loads(line)
-                    sample_ids.add(entry["sample_id"])
-        print(f"Existing metadata file: {output_dir}.json will be used/updated.")
+        if os.path.isfile(f"{output_dir}.json"):
+            with open(f"{output_dir}.json", "r") as f:
+                for line in f:
+                    if line.strip():  # skip empty lines
+                        entry = json.loads(line)
+                        sample_ids.add(entry["sample_id"])
+            print(f"Existing metadata file: {output_dir}.json will be used/updated.")
 
     dataset_generator = MultiChannelGenerator(sample_rate=16000,
                                               output_dir=output_dir,
                                               clean_output_dir=clean_output_dir,
                                               noise_output_dir=noise_output_dir,
+                                              direct_output_dir=direct_output_dir,
                                               simulation=simulation,
                                               verbose=verbose)
 
@@ -89,58 +93,59 @@ if __name__ == "__main__":
 
     idx = 0
     metadata = []
-    with open('log_data_generator.log', 'w') as log_file:
-        log_file.write(f"Starting dataset generation with simulation: {simulation}, noise: {noise}, SNR values: {snr_values}, room sizes: {room_sizes}, RT60 values: {rt60_values}\n")
-        log_file.flush()
-        with tqdm(total=len(speaker_pairs), desc="Generating dataset", unit="sample") as pbar:
-            while idx < len(speaker_pairs):
-                snr, room_dim, rt60_tgt = random.choice(snr_values), random.choice(room_sizes), random.choice(rt60_values)
+    skipped_samples = 0
+    print(f"Starting dataset generation with simulation: {simulation}, noise: {noise}, SNR values: {snr_values}, room sizes: {room_sizes}, RT60 values: {rt60_values}\n")
 
-                audio_files = speaker_pairs[indexes[idx]]
-                
-                if audio_files["ID"] in sample_ids:
-                    # print(f"Sample ID {audio_files['ID']} already exists in metadata. Skipping generation.")
-                    log_file.write(f"Sample ID {audio_files['ID']} already exists in metadata. Skipping generation.")
-                    log_file.flush()
-                    idx += 1
-                    pbar.update(1)
-                    continue
+    with tqdm(total=len(speaker_pairs), desc="Generating dataset", unit="sample") as pbar:
+        while idx < len(speaker_pairs):
+            snr, room_dim, rt60_tgt = random.choice(snr_values), random.choice(room_sizes), random.choice(rt60_values)
 
-                if idx==len(speaker_pairs)-1:
-                    dataset_generator.verbose = True
-                    dataset_generator.verbose_outpur_dir = output_dir+'_plots'
-                    os.makedirs(output_dir+'_plots', exist_ok=True)
-                try:
-                    sample_meta_data = dataset_generator.generate_multichannel_audio(room_dim=room_dim,
-                                                                                        rt60_tgt=rt60_tgt,
-                                                                                        snr=snr,
-                                                                                        audio_files=audio_files,
-                                                                                        num_interfering_sources=num_interfering_sources,
-                                                                                        with_DRR=True,
-                                                                                        save_audio=save_multichannel,
-                                                                                        save_noise_audio=save_noise_audio)
-                    if save_binaural:
-                        dataset_generator.generate_binaural_audio(room_dim, rt60_tgt, snr, audio_files, num_interfering_sources,
-                                                            azimuth_deg=90.0, save_audio=save_binaural)
-                    if save_multichannel:
-                        with open(f"{output_dir}.json", "a") as f:
-                            json.dump(sample_meta_data, f)  # Dump each dictionary separately
-                            f.write("\n")  # Add a newline after each JSON object
-                    if verbose:
-                        log_file.write(sample_meta_data + '\n')
-
-                    metadata.append(sample_meta_data)
-                    
-                
-                except Exception as e:
-                    log_file.write("\n{ Error while processing: " + str(audio_files) + '\n' + str(e) + '}\n')
-                    print('Error while processing: ' + str(audio_files) + 'see log_reverb.log')
-
+            audio_files = speaker_pairs[indexes[idx]]
+            
+            if audio_files["ID"] in sample_ids:
+                # print(f"Sample ID {audio_files['ID']} already exists in metadata. Skipping generation.")
+                sample_ids.discard(audio_files["ID"])  # Remove from set to keep it smaller for future lookups
+                skipped_samples += 1
                 idx += 1
                 pbar.update(1)
+                continue
+
+            if idx==len(speaker_pairs)-1:
+                dataset_generator.verbose = True
+                dataset_generator.verbose_outpur_dir = output_dir+'_plots'
+                os.makedirs(output_dir+'_plots', exist_ok=True)
+            try:
+                sample_meta_data = dataset_generator.generate_multichannel_audio(room_dim=room_dim,
+                                                                                    rt60_tgt=rt60_tgt,
+                                                                                    snr=snr,
+                                                                                    audio_files=audio_files,
+                                                                                    num_interfering_sources=num_interfering_sources,
+                                                                                    with_DRR=True,
+                                                                                    save_audio=save_multichannel,
+                                                                                    save_noise_audio=save_noise_audio,
+                                                                                    save_direct_audio=save_direct_audio)
+                if save_binaural:
+                    dataset_generator.generate_binaural_audio(room_dim, rt60_tgt, snr, audio_files, num_interfering_sources,
+                                                        azimuth_deg=90.0, save_audio=save_binaural)
+                if save_multichannel:
+                    with open(f"{output_dir}.json", "a") as f:
+                        json.dump(sample_meta_data, f)  # Dump each dictionary separately
+                        f.write("\n")  # Add a newline after each JSON object
+                if verbose:
+                    print(sample_meta_data + '\n')
+
+                metadata.append(sample_meta_data)
+                
+            
+            except Exception as e:
+                print("\n{ Error while processing: " + str(audio_files) + '\n' + str(e) + '}\n')
+
+            idx += 1
+            pbar.update(1)
                 
 
     print(f"Dataset generation complete! {idx} samples successfully processed. Save status: Multi channel:{save_multichannel}, Multi Channel Noise:{save_noise_audio}, Binaural:{save_binaural}")
+    print(f"Skipped {skipped_samples} samples that already existed in metadata.")
 
     # EDA
     if EDA:

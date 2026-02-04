@@ -16,3 +16,6 @@ proc_mouth_roi/
 test_Reverb_*
 log_data_generator.log
 speaker_pairs.json
+mouth_roi_test_dataset/
+*.h5
+dummy.py

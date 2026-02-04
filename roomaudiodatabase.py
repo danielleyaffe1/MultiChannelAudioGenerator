@@ -11,12 +11,15 @@ from pyroomacoustics.directivities import MeasuredDirectivityFile, Rotation3D
 
 
 class MultiChannelGenerator:
-    def __init__(self, sample_rate=16000, output_dir=None, clean_output_dir=None, noise_output_dir=None, simulation='room', verbose=False, verbose_outpur_dir=None):
+    def __init__(self, sample_rate=16000, output_dir=None, clean_output_dir=None, noise_output_dir=None, direct_output_dir=None, simulation='room', verbose=False, verbose_outpur_dir=None):
         self.sample_rate = sample_rate
         self.audio_length = 3   # sec
         self.output_dir = output_dir
         if self.output_dir:
             os.makedirs(output_dir, exist_ok=True)
+        self.direct_output_dir = direct_output_dir
+        if self.direct_output_dir:
+            os.makedirs(direct_output_dir, exist_ok=True)
         self.clean_output_dir = clean_output_dir
         if self.clean_output_dir:
             os.makedirs(clean_output_dir, exist_ok=True)
@@ -52,14 +55,14 @@ class MultiChannelGenerator:
     def generate_room(self, room_dim, rt60_tgt, only_direct=False):
         """Creates a room with given size and RT60."""
         e_absorption, max_order = pra.inverse_sabine(rt60_tgt, room_dim)
-        if self.simulation_type != 'room':
+        if self.simulation_type != 'room': #free_field -> no reverberation
             max_order = 0
 
         if not only_direct:
             room = pra.ShoeBox(room_dim,
                                fs=self.sample_rate,
                                materials=pra.Material(e_absorption),
-                               max_order=40, # FIXME
+                               max_order=max_order,
                                use_rand_ism=False)
 
         else:   # To simulate only the direct signal
@@ -137,6 +140,34 @@ class MultiChannelGenerator:
             return np.pad(audio, (0, segment_len - len(audio)))
 
         return audio[:segment_len]
+    
+    def get_DRR(self, rir_reverb, rir_direct=None, window_ms=10):
+        if rir_direct is not None:
+            if len(rir_direct) < len(rir_reverb):
+                rir_direct = np.pad(rir_direct, (0, max(0, len(rir_reverb) - len(rir_direct))), mode='constant')
+            elif len(rir_direct) > len(rir_reverb):
+                raise ValueError('Direct RIR length cannot be greater than reverberant RIR length')
+            direct_energy = np.sum(rir_direct ** 2)
+            reverb_energy = np.sum((rir_reverb-rir_direct) ** 2)
+            drr_db = 10 * np.log10(direct_energy / (reverb_energy + 1e-10))  # Avoid division by zero
+            return drr_db
+        
+        window_ms = 10
+        peak_idx = np.argmax(np.abs(rir_reverb))
+        window_samples = int(window_ms * self.sample_rate / 1000)
+
+        start = max(0, peak_idx - window_samples)
+        end = min(len(rir_reverb), peak_idx + window_samples)
+
+        rir_direct = rir_reverb[start:end]
+        rir_reverb = rir_reverb[end:]
+
+        direct_energy = np.sum(rir_direct ** 2)
+        reverb_energy = np.sum(rir_reverb ** 2)
+
+        drr_db = 10 * np.log10(direct_energy / (reverb_energy + 1e-10))  # Avoid division by zero
+        #room_only_target.plot_rir(FD=False)
+        return drr_db
 
     def save_single_channel_audio(self, filename, data):
         """Saves a multi-channel audio file."""
@@ -163,7 +194,7 @@ class MultiChannelGenerator:
         sf.write(filename+'.wav', cropped_signals.T, self.sample_rate)
 
 
-    def generate_multichannel_audio(self, room_dim, rt60_tgt, snr, audio_files, num_interfering_sources=1, with_DRR=False, save_audio=False, save_noise_audio=False):
+    def generate_multichannel_audio(self, room_dim, rt60_tgt, snr, audio_files, num_interfering_sources=1, with_DRR=False, save_audio=False, save_noise_audio=False, save_direct_audio=False):
         """
         Generates a multichannel audio with room size, RT60, and SNR condition with possible interfering sources.
 
@@ -181,9 +212,8 @@ class MultiChannelGenerator:
         room_only_target = self.generate_room(room_dim, rt60_tgt)
         mic_positions = self.add_microphones(room_only_target, glasses_position)
         
-        # Add target speaker with random azimuth location
-        target_audio, target_sr = librosa.load(audio_files["target_file"], sr=self.sample_rate)
-        # target_info = audio_files["target"].split('/')
+        # Add target speaker
+        target_audio, _ = librosa.load(audio_files["target_file"], sr=self.sample_rate)
         r_src, ph_src = 0.5, 90   # ph=0 is on the x+ axis, then pi increases counter clock wise
         target_position, _ = self.add_speaker(room_only_target, glasses_position, target_audio,[r_src, ph_src, 0], delay=False)
         
@@ -194,10 +224,8 @@ class MultiChannelGenerator:
         signals_only_target = room_only_target.mic_array.signals
         peak = np.max(np.abs(signals_only_target))
         if peak > 0:
-            # scale so peak <= 1.0 (or you can choose RMS normalization)
             signals_only_target = signals_only_target / max(1.0, peak)
-        
-        
+
         # Room simulation with only interfers/ noise speakers (for SNR scaling and saving noise data)
         if num_interfering_sources != len(audio_files["interferes"]):
             raise ValueError('Number of wanted interfering sources must match to generated target-interference definition')
@@ -234,7 +262,6 @@ class MultiChannelGenerator:
         signals = signals_only_target + g*signals_only_interfering
         peak = np.max(np.abs(signals))
         if peak > 0:
-            # scale so peak <= 1.0 (or you can choose RMS normalization)
             signals = signals / max(1.0, peak)
 
         # Saving data: mixture data
@@ -253,35 +280,43 @@ class MultiChannelGenerator:
         if save_audio:
             if self.clean_output_dir is None:
                 raise ValueError('A clean output directory has not been provided')
-            # filename_clean = os.path.join(self.clean_output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
             filename_clean = os.path.join(self.clean_output_dir, target_id, sentence)
             self.save_multi_channel_audio(filename_clean, signals_only_target)
 
+        # Saving data: direct data
+        if save_direct_audio:
+            # Room simulation with direct path only (for direct target audio saving)
+            room_direct_target = self.generate_room(room_dim, rt60_tgt, only_direct=True)
+            self.add_microphones(room_direct_target, glasses_position)
+            self.add_speaker(room_direct_target, glasses_position, target_audio,[r_src, ph_src, 0], delay=False)
+            room_direct_target.simulate()
+            rir_only_direct_target = room_direct_target.rir[1][0]  # RIR for mic 0 and source 0 (later used for DRR)
+            signals_direct_target = room_direct_target.mic_array.signals
+            peak = np.max(np.abs(signals_direct_target))
+            if peak > 0:
+                signals_direct_target = signals_direct_target / max(1.0, peak)
+
+            signals_direct_target = signals_direct_target[:,:int(self.audio_length * self.sample_rate)]
+
+            if self.direct_output_dir is None:
+                raise ValueError('A direct output directory has not been provided')
+            filename_direct = os.path.join(self.direct_output_dir, target_id, sentence)
+            self.save_multi_channel_audio(filename_direct, signals_direct_target)
+            
         # Saving data: noise data
         if save_noise_audio:
             if self.noise_output_dir is None:
                 raise ValueError('A noise output directory has not been provided')
-            # filename_noise = os.path.join(self.noise_output_dir, f"target_{target_info[1]}_{sentence}_sampleid_{sample_id}")
             filename_noise = os.path.join(self.noise_output_dir, target_id, sentence)
             self.save_multi_channel_audio(filename_noise, g*signals_only_interfering)
 
         drr_db = None
         if with_DRR:
-            window_ms = 1.0
-            peak_idx = np.argmax(np.abs(rir_only_target))
-            window_samples = int(window_ms * self.sample_rate / 1000)
-
-            start = max(0, peak_idx - window_samples)
-            end = min(len(rir_only_target), peak_idx + window_samples)
-
-            rir_direct = rir_only_target[start:end]
-            rir_reverb = np.concatenate((rir_only_target[:start], rir_only_target[end:]))
-
-            direct_energy = np.sum(rir_direct ** 2)
-            reverb_energy = np.sum(rir_reverb ** 2)
-
-            drr_db = 10 * np.log10(direct_energy / (reverb_energy + 1e-10))  # Avoid division by zero
-            #room_only_target.plot_rir(FD=False)
+            if save_direct_audio:
+                drr_db = self.get_DRR(rir_reverb=rir_only_target, rir_direct=rir_only_direct_target)
+            else:
+                drr_db = self.get_DRR(rir_reverb=rir_only_target)
+            
 
         rt60 = room_only_target.measure_rt60(plot=False) # measure the reverberation time, to show plot add plt.show() inside function
 
@@ -443,7 +478,7 @@ def chk_speaker_position_in_room(position, Lx, Ly, glasses_position):
 
         # Compute and print the radius (distance from center)
         radius = np.sqrt((x - gx) ** 2 + (y - gy) ** 2)
-        if radius < 2.5:
+        if radius < 1.5:
             print(f"Speaker at {position} must be ≥ 1 m from all walls, room is {Lx}x{Ly}. Fixing Position...Speaker new radial distance from Mics: {radius:.2f} meters, new position: ({x:.2f}, {y:.2f})")
 
     return x, y
