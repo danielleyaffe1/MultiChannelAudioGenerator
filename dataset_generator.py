@@ -19,7 +19,7 @@ if __name__ == "__main__":
     # print(f"Done extracting audio from mpg files in {AV_DATA_FOLDER}. Saved in {A_DATA_FOLDER}")
 
     # Define dataset parameters
-    snr_values = [-20, -15, -10, -5, 0, 5]      # Different SNR levels
+    snr_values = [-10, -5, 0, 5]      # Different SNR levels
     simulation = 'room'                    # Choose simulation type between 'room' or 'free_field'
     noise = 'babble'                     # Choose noise type between 'interfere' or 'babble'
     num_pairs_per_spk = None                # None = create pairs for all target files (max possible)
@@ -47,7 +47,7 @@ if __name__ == "__main__":
         noise_name = str(num_interfering_sources)+'Inter'
     elif noise == 'babble':
         num_interfering_sources = 3  # Number of interferes, choose >3 for babble noise
-        noise_name = 'Babble2'
+        noise_name = 'Babble3'
     else:
         raise ValueError('Invalid noise request. Please choose a noise type: interfere or babble')
 
@@ -72,13 +72,17 @@ if __name__ == "__main__":
 
         sample_ids = set()  # use a set for quick membership checks
 
+        # Count existing samples in metadata file to avoid regenerating them
+        line_count = 0
         if os.path.isfile(f"{output_dir}.json"):
             with open(f"{output_dir}.json", "r") as f:
                 for line in f:
                     if line.strip():  # skip empty lines
                         entry = json.loads(line)
                         sample_ids.add(entry["sample_id"])
+                        line_count += 1
             print(f"Existing metadata file: {output_dir}.json will be used/updated.")
+            print(f"Found {line_count} existing samples in metadata. Will skip generating these samples again.")
 
     dataset_generator = MultiChannelGenerator(sample_rate=16000,
                                               output_dir=output_dir,
@@ -88,29 +92,32 @@ if __name__ == "__main__":
                                               simulation=simulation,
                                               verbose=verbose)
 
-    indexes = list(range(len(speaker_pairs)))
-    random.shuffle(indexes)
+    # Keep only samples that are NOT already in metadata in filtered_indices. If no samples exist filtered_indices is all. 
+    if len(sample_ids) != 0:
+        print(f"Filtering out existing samples from speaker pairs based on metadata. Existing sample count: {len(sample_ids)}")
+        filtered_indices = [i for i in range(len(speaker_pairs))
+                            if speaker_pairs[i]["ID"] not in sample_ids]
+        print(f"{len(filtered_indices)} samples to generate after filtering out existing metadata samples. ")
+        if len(speaker_pairs) - len(filtered_indices) != line_count:
+            raise ValueError(f"Mismatch in counting existing samples. Expected {line_count} but found {len(speaker_pairs) - len(filtered_indices)}. Please check the metadata file and speaker pairs consistency.")
+    
+        random.shuffle(filtered_indices)
+
+    else:
+        filtered_indices = list(range(len(speaker_pairs)))
+        random.shuffle(filtered_indices)
 
     idx = 0
     metadata = []
-    skipped_samples = 0
     print(f"Starting dataset generation with simulation: {simulation}, noise: {noise}, SNR values: {snr_values}, room sizes: {room_sizes}, RT60 values: {rt60_values}\n")
 
-    with tqdm(total=len(speaker_pairs), desc="Generating dataset", unit="sample") as pbar:
-        while idx < len(speaker_pairs):
+    with tqdm(total=len(filtered_indices), desc="Generating dataset", unit="sample") as pbar:
+        while idx < len(filtered_indices):
             snr, room_dim, rt60_tgt = random.choice(snr_values), random.choice(room_sizes), random.choice(rt60_values)
 
-            audio_files = speaker_pairs[indexes[idx]]
-            
-            if audio_files["ID"] in sample_ids:
-                # print(f"Sample ID {audio_files['ID']} already exists in metadata. Skipping generation.")
-                sample_ids.discard(audio_files["ID"])  # Remove from set to keep it smaller for future lookups
-                skipped_samples += 1
-                idx += 1
-                pbar.update(1)
-                continue
+            audio_files = speaker_pairs[filtered_indices[idx]]
 
-            if idx==len(speaker_pairs)-1:
+            if idx==len(filtered_indices)-1:
                 dataset_generator.verbose = True
                 dataset_generator.verbose_outpur_dir = output_dir+'_plots'
                 os.makedirs(output_dir+'_plots', exist_ok=True)
@@ -145,7 +152,6 @@ if __name__ == "__main__":
                 
 
     print(f"Dataset generation complete! {idx} samples successfully processed. Save status: Multi channel:{save_multichannel}, Multi Channel Noise:{save_noise_audio}, Binaural:{save_binaural}")
-    print(f"Skipped {skipped_samples} samples that already existed in metadata.")
 
     # EDA
     if EDA:

@@ -33,15 +33,21 @@ class MultiChannelGenerator:
         
         # Microphone coordinates in meters (Aria Glasses V1)
         # Source: https://www.chimechallenge.org/challenges/chime8/task3/data
-        self.microphone_array = np.array([ #FIXME: check x,y axis matching the coordinates system in pyroomacoustics
-            [0.0476, 0.0995, 0.0068],  # Lower-lens right
-            [-0.0074, 0.1059,  0.0507],  # Nose bridge
-            [-0.0449, 0.0995,  0.0076],  # Lower-lens left
-            [-0.0641, 0.0928,  0.0512],  # Front left
-            [0.0566, 0.0993, 0.0522],  # Front right
-            # [-0.0042, -0.0845, 0.0335], # Rear right (binaural)
-            # [-0.0048,  0.0775, 0.0349], # Rear left (binaural)
+        mic_chime = np.array([
+            [ 0.0995, -0.0476, 0.0068],  # lower-lens right
+            [ 0.1059,  0.0074, 0.0507],  # nose bridge
+            [ 0.0995,  0.0449, 0.0076],  # lower-lens left
+            [ 0.0928,  0.0641, 0.0512],  # front left
+            [ 0.0993, -0.0566, 0.0522],  # front right
+            [-0.0042, -0.0845, 0.0335],  # rear right
+            [-0.0048,  0.0775, 0.0349],  # rear left
         ])
+        
+        # Convert to Pyroomacoustics coordinates
+        self.microphone_array = np.zeros_like(mic_chime)
+        self.microphone_array[:, 0] = -mic_chime[:, 1]  # x
+        self.microphone_array[:, 1] =  mic_chime[:, 0]  # y
+        self.microphone_array[:, 2] =  mic_chime[:, 2]  # z
 
         # 
         # self.microphone_array = np.array([
