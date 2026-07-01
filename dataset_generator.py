@@ -20,13 +20,14 @@ if __name__ == "__main__":
 
     # Define dataset parameters
     snr_values = [-10, -5, 0, 5]      # Different SNR levels
-    simulation = 'room'                    # Choose simulation type between 'room' or 'free_field'
-    noise = 'babble'                     # Choose noise type between 'interfere' or 'babble'
-    num_pairs_per_spk = None                # None = create pairs for all target files (max possible)
-    max_total_samples = None                  # Maximum data samples
-    save_multichannel = True            # Save multi channel mixed audio and clean seperately
-    save_noise_audio = True             # Save multi channel noise audio - for IRM calculaiton...
-    save_direct_audio = True             # Save multi channel direct target audio - for STOI calculaiton...
+    simulation = 'room'               # Choose simulation type between 'room' or 'free_field'
+    noise = 'babble'                  # Choose noise type between 'interfere' or 'babble'
+    sample_rate = 16000               # Sample rate for audio files
+    num_pairs_per_spk = None          # None = create pairs for all target files (max possible)
+    max_total_samples = None          # Maximum data samples, None = create all possible
+    save_multichannel = True          # Save multi channel mixed audio and clean seperately
+    save_noise_audio = True           # Save multi channel noise audio - for IRM calculaiton...
+    save_direct_audio = True          # Save multi channel direct target audio - for STOI calculaiton...
     save_binaural = False
     verbose = False
     EDA = True
@@ -37,17 +38,17 @@ if __name__ == "__main__":
         sim_name = 'Reverb'
     elif simulation == 'free_field':
         room_sizes = [[12.0, 9.0, 3.0]]
-        rt60_values = [0.2]
+        rt60_values = [0.2]                         # Unused for free field, but required for function call
         sim_name = 'FreeField'
     else:
         raise ValueError('Invalid simulation request. Please choose a simulation type: room or free_field')
 
     if noise == 'interfere':
-        num_interfering_sources = 1  # Number of interferes, choose >4 for babble noise
+        num_interfering_sources = 1  # Number of interferes, choose >3 for babble noise
         noise_name = str(num_interfering_sources)+'Inter'
     elif noise == 'babble':
-        num_interfering_sources = 3  # Number of interferes, choose >3 for babble noise
-        noise_name = 'Babble3'
+        num_interfering_sources = 4  # Number of interferes, choose >3 for babble noise
+        noise_name = 'Babble'
     else:
         raise ValueError('Invalid noise request. Please choose a noise type: interfere or babble')
 
@@ -81,10 +82,10 @@ if __name__ == "__main__":
                         entry = json.loads(line)
                         sample_ids.add(entry["sample_id"])
                         line_count += 1
-            print(f"Existing metadata file: {output_dir}.json will be used/updated.")
+            print(f"Existing metadata file: {output_dir}.json found and will be used/updated.")
             print(f"Found {line_count} existing samples in metadata. Will skip generating these samples again.")
 
-    dataset_generator = MultiChannelGenerator(sample_rate=16000,
+    dataset_generator = MultiChannelGenerator(sample_rate=sample_rate,
                                               output_dir=output_dir,
                                               clean_output_dir=clean_output_dir,
                                               noise_output_dir=noise_output_dir,

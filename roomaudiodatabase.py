@@ -5,7 +5,7 @@ import soundfile as sf
 import pyroomacoustics as pra
 import random
 import librosa
-from tools.tools import plot_room_2d, play_audio, plot_signal_at_microphones, get_gender_category, plot_stft
+from tools.tools import plot_room_2d, plot_signal_at_microphones, get_gender_category, plot_stft
 import matplotlib.pyplot as plt
 from pyroomacoustics.directivities import MeasuredDirectivityFile, Rotation3D
 
@@ -49,7 +49,7 @@ class MultiChannelGenerator:
         self.microphone_array[:, 1] =  mic_chime[:, 0]  # y
         self.microphone_array[:, 2] =  mic_chime[:, 2]  # z
 
-        # 
+        # Microphone coordinates in meters (EasyCom)
         # self.microphone_array = np.array([
         #     [-0.082, -0.029, -0.005],  # Left temple
         #     [0.001, 0.030, -0.001],  # Above nose
@@ -200,15 +200,39 @@ class MultiChannelGenerator:
         sf.write(filename+'.wav', cropped_signals.T, self.sample_rate)
 
 
-    def generate_multichannel_audio(self, room_dim, rt60_tgt, snr, audio_files, num_interfering_sources=1, with_DRR=False, save_audio=False, save_noise_audio=False, save_direct_audio=False):
+    def generate_multichannel_audio(self, 
+                                    room_dim, 
+                                    rt60_tgt, 
+                                    snr, 
+                                    audio_files, 
+                                    num_interfering_sources=1, 
+                                    with_DRR=False, 
+                                    save_audio=False, 
+                                    save_noise_audio=False, 
+                                    save_direct_audio=False):
         """
-        Generates a multichannel audio with room size, RT60, and SNR condition with possible interfering sources.
+        Simulate a multi-channel recording for a target speaker mixed with one or more interfering speakers.
 
         Parameters:
-        - room_dim: Room dimension tuples (L, W, H).
-        - rt60_tgt: RT60 value to simulate.
-        - snr: SNR level for interfering speakers [dB].
-        - audio_files: dict, {"ID": int, "target": str with path, "interferes": dict with paths}.
+        - room_dim: Room dimensions as a tuple/list of (L, W, H) in meters.
+        - rt60_tgt: Desired reverberation time (RT60) in seconds for the simulated room.
+        - snr: Target signal-to-noise ratio between the target and interfering speakers in dB.
+        - audio_files: Dictionary containing at least:
+            - "ID": sample identifier,
+            - "target_file": path to the target speech file,
+            - "target_id": target speaker ID,
+            - "target_sentence": sentence identifier,
+            - "interferes": mapping of interferer IDs to audio file paths,
+            - "interferer_ids": list of interferer speaker IDs.
+        - num_interfering_sources: Number of interfering speakers to use. Must match the number of entries in audio_files["interferes"].
+        - with_DRR: If True, compute the direct-to-reverberant ratio (DRR) for the target signal.
+        - save_audio: If True, save the mixed multichannel audio and clean target audio.
+        - save_noise_audio: If True, save the interference-only multichannel audio.
+        - save_direct_audio: If True, save the direct-path target multichannel audio.
+
+        Returns:
+        A metadata dictionary describing the generated sample, including speaker IDs, room settings, SNR, DRR,
+        channel count, gender category, output path, and sample ID.
         """
 
         source_positions = np.zeros((num_interfering_sources + 1, len(room_dim)))
