@@ -301,8 +301,11 @@ def generate_speaker_pairs(datapath, num_samples=None, num_interferers=1, max_to
             #     available_speakers = [spk for spk in audio_files.keys() if spk != target_speaker and spk in male_id]
             # else:
             #     raise ValueError(f"Unknown gender for target speaker {target_speaker}")
-
-            interferes = random.sample(available_speakers, min(num_interferers, len(available_speakers)))
+            if isinstance(num_interferers, list):
+                num_interferers_ = random.choice(num_interferers)
+            else:
+                num_interferers_ = num_interferers
+            interferes = random.sample(available_speakers, min(num_interferers_, len(available_speakers)))
 
             # Select sentences for interferes
             interferer_sentences = {spk: os.path.join(datapath, spk, random.choice(audio_files[spk])) for spk in interferes}

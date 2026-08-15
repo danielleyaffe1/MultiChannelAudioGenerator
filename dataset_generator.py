@@ -44,10 +44,10 @@ if __name__ == "__main__":
         raise ValueError('Invalid simulation request. Please choose a simulation type: room or free_field')
 
     if noise == 'interfere':
-        num_interfering_sources = 1  # Number of interferes, choose >3 for babble noise
+        num_interfering_sources = 1
         noise_name = str(num_interfering_sources)+'Inter'
     elif noise == 'babble':
-        num_interfering_sources = 4  # Number of interferes, choose >3 for babble noise
+        num_interfering_sources = 3  # Number of interferes, choose >=3 for babble noise
         noise_name = 'Babble'
     else:
         raise ValueError('Invalid noise request. Please choose a noise type: interfere or babble')

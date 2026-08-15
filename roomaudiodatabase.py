@@ -236,7 +236,7 @@ class MultiChannelGenerator:
         """
 
         source_positions = np.zeros((num_interfering_sources + 1, len(room_dim)))
-        glasses_position = [room_dim[0] / 3, room_dim[1] / 2, 1.5] # michrophones set in the middle of the room
+        glasses_position = [room_dim[0] / 3, room_dim[1] / 2, 1.5] # michrophones set in the room
         
         # Room simulation with only the target speaker (For SNR scaling and saving target data)
         room_only_target = self.generate_room(room_dim, rt60_tgt)
@@ -252,9 +252,8 @@ class MultiChannelGenerator:
         room_only_target.simulate()
         rir_only_target = room_only_target.rir[1][0]  # RIR for mic 0 and source 0 (later used for DRR)
         signals_only_target = room_only_target.mic_array.signals
-        peak = np.max(np.abs(signals_only_target))
-        if peak > 0:
-            signals_only_target = signals_only_target / max(1.0, peak)
+        peak_target = np.max(np.abs(signals_only_target))
+        signals_only_target = signals_only_target / max(1.0, peak_target)
 
         # Room simulation with only interfers/ noise speakers (for SNR scaling and saving noise data)
         if num_interfering_sources != len(audio_files["interferes"]):
@@ -276,23 +275,20 @@ class MultiChannelGenerator:
             
         room_only_interfering.simulate()
         signals_only_interfering = room_only_interfering.mic_array.signals
-        peak = np.max(np.abs(signals_only_interfering))
-        if peak > 0:
-            # scale so peak <= 1.0 (or you can choose RMS normalization)
-            signals_only_interfering = signals_only_interfering / max(1.0, peak)
+        peak_interfering = np.max(np.abs(signals_only_interfering))
+        signals_only_interfering = signals_only_interfering / max(1.0, peak_interfering)
 
         # Simulate multi-channel signals with SNR
         signals_only_target = signals_only_target[:,:int(self.audio_length * self.sample_rate)]
         signals_only_interfering = signals_only_interfering[:,:int(self.audio_length * self.sample_rate)]
         g = self.scale_noise(signals_only_interfering[0], signals_only_target[0], snr, find_alpha=True) #without loss of generalization compute SNR according to channel 0
         
-        if np.abs((10 * np.log10(np.mean(signals_only_target[0]**2) / np.mean((g*signals_only_interfering[0])**2)))-snr) > 0.1:
+        if np.abs((10 * np.log10(np.mean(signals_only_target[0]**2) / np.mean((g*signals_only_interfering[0])**2)))-snr) > 0.01:
             raise ValueError('SNR calculation error, check scale_noise function')   
         
         signals = signals_only_target + g*signals_only_interfering
-        peak = np.max(np.abs(signals))
-        if peak > 0:
-            signals = signals / max(1.0, peak)
+        peak_mixture = np.max(np.abs(signals))
+        signals = signals / max(1.0, peak_mixture)
 
         # Saving data: mixture data
         filename = 'None'
@@ -323,8 +319,7 @@ class MultiChannelGenerator:
             rir_only_direct_target = room_direct_target.rir[1][0]  # RIR for mic 0 and source 0 (later used for DRR)
             signals_direct_target = room_direct_target.mic_array.signals
             peak = np.max(np.abs(signals_direct_target))
-            if peak > 0:
-                signals_direct_target = signals_direct_target / max(1.0, peak)
+            signals_direct_target = signals_direct_target / max(1.0, peak_target)  # Using peak_target since assuming peak < peak_target
 
             signals_direct_target = signals_direct_target[:,:int(self.audio_length * self.sample_rate)]
 
@@ -376,6 +371,8 @@ class MultiChannelGenerator:
                 "room_dim": room_dim,
                 "rt60": round(rt60[0][0], 1),
                 "snr": snr,
+                "alpha": g,
+                "peak_scale": float(max(1.0, peak_mixture)),
                 "DRR": float(round(drr_db, 3)),
                 "num_channels": len(self.microphone_array),
                 "gender": genders,
